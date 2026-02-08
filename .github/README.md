@@ -1,4 +1,4 @@
-# BaseService AI 工程体系
+# AI 工程体系
 
 面向 **Go/Kratos 微服务**的 AI 辅助研发系统，基于 SpecKit 规范驱动开发范式，通过 GitHub Copilot Agent 实现从需求到代码的结构化推进。
 
