@@ -18,30 +18,21 @@ $ARGUMENTS
 
 ## 核心说明
 
-implement 是流水线的最终执行环节，按 tasks.md 逐 Phase 推进代码实现。
+implement 是代码实施阶段，按 tasks.md 推进实现并闭环任务状态。
 
-本 Agent 同时加载两个 Skill：
-- **speckit-implement**：实施执行方法论（逐 Phase 推进 → 断点续做 → 完成校验）
-- **kratos-patterns**：Kratos 框架编码规范，提供各层代码的编写指南（Ent、Proto、biz/data/service 等）
+本 Agent 固定调用 **speckit-implement** 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
 
 ## 执行流程
 
-> 领域方法论详见 **SKILL: speckit-implement**，框架规范详见 **SKILL: kratos-patterns**。
-1. 在开始前与用户确认 Phase 是否阶段性暂停
-2. 前置检查 → *SKILL §前置检查*
-3. 上下文加载 → *SKILL §上下文加载*（解析 tasks、plan、加载 kratos-patterns reference）
-4. 逐 Phase 执行 → *SKILL §逐 Phase 执行*
-  - 和用户要求 Phase 暂停
-    - 每个 Phase 完成后暂停汇报，等用户确认再继续
-    - 代码生成 Phase 需验证生成结果
-  - 用户无 Phase 暂停时一次性执行完成
-5. 完成校验 → *SKILL §完成校验*
+1. 读取 spec、plan、tasks 与必要代码上下文
+2. 调用 `speckit-implement`
+3. 按任务推进实现并更新任务状态
+4. 输出完成情况与阻塞项
+5. 完成后交接 **code-review**
 
 ## 行为规则
 
-- 每完成一个任务 → 在 tasks.md 标记 `[x]`
-- 用户对 Phase 要求
-  - 暂停: 每个 Phase 完成 → 暂停等用户确认
-  - 否则一次性完成
-- 任务失败 → 立即停止，等用户决策
-- 已有 `[x]` 任务 → 自动断点续做
+- 可断点续做，已完成任务不重复执行
+- 任务失败或依赖阻塞时立即停止并报告
+- 可按用户要求进行阶段性暂停

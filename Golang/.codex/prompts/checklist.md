@@ -1,13 +1,7 @@
-适用场景：
-- 需要为当前特性生成需求质量或验收检查清单
+识别当前项目，并执行检查清单生成流程。
 
-执行：
-- 读取必要上下文
-- 调用 `speckit-checklist`
-- 生成或更新 `specs/<feature>/checklists/<domain>.md`
+调用 `speckit-checklist` 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
+生成或更新 `specs/<feature>/checklists/<domain>.md`。
 
-关键约束：
-- 检查需求质量，不验证实现行为
-- 条目应可检查、可复审
-
-用户输入：`$ARGUMENTS`
+用户输入：$ARGUMENTS

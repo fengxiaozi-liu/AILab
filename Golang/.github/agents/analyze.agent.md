@@ -18,23 +18,19 @@ $ARGUMENTS
 
 ## 核心说明
 
-analyze 是 tasks 的下游质量门，对 spec/plan/tasks 三件套做只读交叉检查，不修改任何文件。
+analyze 是 tasks 的下游质量门，用于对 spec、plan、tasks 做只读交叉检查。
 
-本 Agent 加载 **speckit-analyze** skill。
+本 Agent 固定调用 **speckit-analyze** 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
 
 ## 执行流程
 
-> 领域方法论详见 **SKILL: speckit-analyze**。
-
-1. 前置检查 → *SKILL §前置检查*
-2. 文档加载 → *SKILL §文档加载*
-3. 语义模型构建 → *SKILL §语义模型构建*
-4. 检测流程 → *SKILL §检测流程*（7 类检测，最多 50 条）
-5. 输出报告 → *SKILL §输出报告*
-6. 下一步建议 → *SKILL §下一步建议*
+1. 读取 spec、plan、tasks
+2. 调用 `speckit-analyze`
+3. 输出分析报告
+4. 若通过则交接 **implement**
 
 ## 行为规则
 
-- **严格只读**：禁止修改任何文件
+- 严格只读，不修改任何文件
 - 可给出修复建议，但不自动执行
-- 宪法冲突一律 CRITICAL

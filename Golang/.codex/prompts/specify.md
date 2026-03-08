@@ -1,17 +1,7 @@
-适用场景：
-- 用户给出自然语言需求，希望整理成结构化 spec
+识别当前项目，并执行需求规格生成流程。
 
-执行：
-- 读取必要仓库事实与 `skills/speckit-specify/templates/spec-template.md`
-- 调用 `speckit-specify`
-- 生成或更新 `specs/<feature>/spec.md`
+调用 `speckit-specify` 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
+生成或更新 `specs/<feature>/spec.md`。
 
-关键约束：
-- 只写需求，不提前展开实现方案
-- 缺失信息整理为 CQ
-
-完成后：
-- 有 CQ 则建议进入 `/clarify`
-- 无 CQ 则建议进入 `/plan`
-
-用户输入：`$ARGUMENTS`
+用户输入：$ARGUMENTS

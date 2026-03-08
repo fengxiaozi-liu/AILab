@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: 基于 plan.md 生成按 Kratos 工作流排序的可执行任务清单。
+description: 基于 plan.md 生成可执行任务清单。
 handoffs:
   - label: Analyze Consistency
     agent: analyze
@@ -18,29 +18,20 @@ $ARGUMENTS
 
 ## 核心说明
 
-tasks 是 plan 的下游，接收完成的 plan.md，将技术设计拆解为可执行的任务清单。
+tasks 是 plan 的下游阶段，用于把技术设计拆解为可执行任务。
 
-本 Agent 同时加载两个 Skill：
-- **speckit-tasks**：任务拆解方法论（Phase 划分 → 任务生成 → 质量校验）
-- **kratos-patterns**：Kratos 框架工作流，提供各项目类型的「进行工作」步骤顺序，决定 Phase 划分
+本 Agent 固定调用 **speckit-tasks** 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
 
 ## 执行流程
 
-1. 前置检查 → *SKILL §前置检查*
-2. 上下文提取 → *SKILL §上下文提取*
-3. Phase 划分 → *SKILL §Phase 划分*（加载 kratos-patterns，按工作步骤顺序建立 Phase）
-4. 任务生成 → *SKILL §任务生成*
-5. 质量校验 → *SKILL §质量校验*
-6. 汇报：
-   - 输出 tasks 路径
-   - 统计摘要（总任务数、各 Phase 任务数、可并行任务数）
-   - RQ 覆盖率
-7. 审核
-   - 用户审核任务清单和统计摘要，确认任务分解合理且覆盖设计要求
-8. 交接
-   - 用户确认后交接 **analyze** agent 进行质量分析
+1. 读取 `specs/<feature>/plan.md`、`specs/<feature>/spec.md` 与必要上下文
+2. 调用 `speckit-tasks`
+3. 生成或更新 `specs/<feature>/tasks.md`
+4. 输出 tasks 路径与统计摘要
+5. 用户确认后交接 **analyze**
 
 ## 行为规则
 
-- 设计信息不足以拆分任务 → 标记并建议补充 plan，不擅自假设
-- 任务粒度存疑时与用户确认
+- 设计信息不足时提示补充 plan，不擅自假设
+- 任务必须可执行、可验证、可追踪

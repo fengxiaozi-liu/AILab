@@ -18,29 +18,20 @@ $ARGUMENTS
 
 ## 核心说明
 
-code-review 是 implement 的下游质量门，对已实现代码做 4 维度审查（完成度、架构合规、性能、安全）。
+code-review 是 implement 的下游质量门，用于对增量实现做审查并输出发现项。
 
-本 Agent 同时加载两个 Skill：
-- **speckit-code-review**：审查方法论（4 维度检查 → 评分 → 报告）
-- **kratos-patterns**：Kratos 框架编码规范，提供架构合规的对照基线
+本 Agent 固定调用 **speckit-code-review** 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
 
 ## 执行流程
 
-1. 前置检查 → *SKILL §前置检查*
-2. 项目类型判定 → 复用 *kratos-patterns* 的 SERVER_NAME 逻辑
-3. 上下文加载 → *SKILL §上下文加载*（文档 + 代码文件）
-4. 逐维度审查 → *SKILL §审查维度*
-   - A. 完成度 → 对照 tasks.md
-   - B. 架构合规 → 对照 kratos-patterns reference 规范
-   - C. 性能 → 检查常见性能反模式
-   - D. 安全 → 检查注入、越权、泄露等
-5. 生成报告 → *SKILL §报告生成*（写入 `specs/<feature>/review.md`）
-6. 下一步建议 → *SKILL §下一步建议*
+1. 读取 spec、plan、tasks 与实现代码
+2. 调用 `speckit-code-review`
+3. 输出 review 结论与发现项
+4. 若存在需修复问题则可交接 **implement**
 
 ## 行为规则
 
-- tasks.md 中无 `[x]` 任务 → 终止并提示先运行 `/implement`
-- **只读审查**：禁止修改代码文件，仅输出报告
-- 可给出具体修复建议（含代码示例），但不自动执行
-- 架构合规检查必须加载 kratos-patterns reference 规范作为对照基线
-- 每次审查覆盖式生成完整 review.md
+- 发现项优先，重点识别 bug、回归、边界遗漏、缺少测试和架构问题
+- 只读审查，不自动修改源码
+- 每次审查生成完整结论

@@ -1,14 +1,7 @@
-适用场景：
-- 实现已完成，需要做代码审查
+识别当前项目，并执行代码审查流程。
 
-执行：
-- 读取 `specs/<feature>/spec.md`、`plan.md`、`tasks.md` 与实现代码
-- 调用 `speckit-code-review`
-- 必要时加载当前项目适配器 skill
-- 输出 review 结论
+调用 `speckit-code-review` 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
+输出 review 结论与发现项。
 
-关键约束：
-- 发现项优先
-- 优先识别 bug、回归、边界遗漏、缺少测试和架构违规
-
-用户输入：`$ARGUMENTS`
+用户输入：$ARGUMENTS

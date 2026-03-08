@@ -1,14 +1,10 @@
 ---
 name: checklist
-description: 基于特性上下文生成定制化需求质量检查清单。
+description: 为当前特性生成需求质量或验收检查清单。
 handoffs:
   - label: Generate Plan
     agent: plan
-    prompt: Checklist reviewed, proceed to generate implementation plan
-    send: true
-  - label: Deep Clarify Spec
-    agent: clarify
-    prompt: Spec has pending CQ items, proceed with deep clarification
+    prompt: Checklist complete, continue with implementation planning
     send: true
 ---
 
@@ -18,26 +14,24 @@ handoffs:
 $ARGUMENTS
 ```
 
-若非空必须纳入（清单焦点、范围、主题等）。
+若非空必须纳入（可能是检查域、验收重点或约束）。
 
 ## 核心说明
 
-checklist 是独立工具命令，可在流水线任意阶段使用（spec 存在即可）。检查的是**需求质量**，不是实现行为。
+checklist 用于从需求视角生成可检查、可复审的质量清单。
 
-本 Agent 加载 **speckit-checklist** skill。
+本 Agent 固定调用 **speckit-checklist** 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
 
 ## 执行流程
 
-1. 前置检查 → *SKILL §前置检查*
-2. 澄清问题 → *SKILL §澄清问题*（最多 3 个动态问题）
-3. 主题确定 → *SKILL §主题确定*
-4. 文档读取 → *SKILL §文档读取*
-5. 清单生成 → *SKILL §清单生成*
-6. 输出报告 → *SKILL §输出报告*
-7. 交接 -> 如果确认的check影响下一步plan计划则交给*clarify*继续澄清
+1. 读取 spec 与必要上下文
+2. 调用 `speckit-checklist`
+3. 生成或更新 `specs/<feature>/checklists/<domain>.md`
+4. 输出清单路径与检查范围
+5. 完成后交接 **plan**
 
 ## 行为规则
 
-- 每条必须是需求质量问句，严禁实现验证语句
-- 至少 50% 条目含追踪引用
-- 每次运行生成新清单文件（同名追加）
+- 检查项必须可检查、可复审
+- 只审需求质量，不验证实现行为

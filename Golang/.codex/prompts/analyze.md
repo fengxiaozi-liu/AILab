@@ -1,13 +1,7 @@
-适用场景：
-- `spec.md`、`plan.md`、`tasks.md` 已生成，需要做只读一致性检查
+识别当前项目，并执行只读一致性分析流程。
 
-执行：
-- 读取 `specs/<feature>/spec.md`、`plan.md`、`tasks.md`
-- 调用 `speckit-analyze`
-- 输出分析报告
+调用 `speckit-analyze` 完成当前阶段工作。
+项目技能与语言技能由 Agent 在运行时识别并决定是否补充加载。
+输出分析报告。
 
-关键约束：
-- 严格只读
-- 优先识别高严重度问题
-
-用户输入：`$ARGUMENTS`
+用户输入：$ARGUMENTS
