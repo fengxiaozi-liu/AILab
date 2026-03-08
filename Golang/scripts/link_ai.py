@@ -53,7 +53,7 @@ TARGETS = {
         generate_project_agents=True,
         project_instructions_file="AGENTS.md",
         managed_user_items=("AGENTS.md", "prompts", "agents"),
-        shared_user_items=("skills", "agents"),
+        shared_user_items=("skills",),
     ),
     "github": TargetConfig(
         name="github",
@@ -69,7 +69,7 @@ TARGETS = {
         generate_project_agents=True,
         project_instructions_file=".github/copilot-instructions.md",
         managed_project_items=("agents", "prompts"),
-        shared_project_items=("skills", "agents"),
+        shared_project_items=("skills",),
     ),
     "gemini": TargetConfig(
         name="gemini",
@@ -79,7 +79,7 @@ TARGETS = {
         generate_project_agents=True,
         project_instructions_file="GEMINI.md",
         managed_user_items=("workflows",),
-        shared_user_items=("skills", "agents"),
+        shared_user_items=("skills",),
     ),
 }
 
