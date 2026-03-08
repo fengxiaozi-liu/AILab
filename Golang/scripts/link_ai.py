@@ -28,6 +28,7 @@ INSTALL_CONFIG_FILE = "install-config.json"
 # Template markers (模板占位符)
 RUNTIME_HOME_PLACEHOLDER = "{{runtime_home}}"
 TIMESTAMP_PLACEHOLDER = "{{timestamp}}"
+PRESERVED_SKILL_DIR_PREFIX = "."
 
 
 # --- Configuration (配置及目标定义) ---
@@ -203,6 +204,26 @@ class AssetSyncManager:
             for item in dst.rglob("*.md"):
                 render_text_file(item, self.runtime_text)
 
+    def copy_skills_tree(self, src: Path, dst: Path) -> None:
+        """(拷贝 skills 目录时保留目标目录下的系统技能目录，如 .system)"""
+        preserved_items: list[tuple[Path, Path]] = []
+        if dst.exists():
+            for item in dst.iterdir():
+                if not item.name.startswith(PRESERVED_SKILL_DIR_PREFIX):
+                    continue
+
+                backup_path = Path(tempfile.mkdtemp(prefix="skills-preserve-")) / item.name
+                shutil.copytree(item, backup_path)
+                preserved_items.append((backup_path, dst / item.name))
+
+        self.copy_tree(src, dst)
+
+        for backup_path, restore_path in preserved_items:
+            if restore_path.exists():
+                robust_remove(restore_path)
+            shutil.copytree(backup_path, restore_path)
+            robust_remove(backup_path.parent)
+
     def sync_items(self, src_dir: Path, dst_dir: Path, items: tuple[str, ...]) -> None:
         """(按照给定的清单按需挑选目录中的指定项进行拷贝同步)"""
         dst_dir.mkdir(parents=True, exist_ok=True)
@@ -216,7 +237,10 @@ class AssetSyncManager:
                 continue
                 
             if src.is_dir():
-                self.copy_tree(src, dst)
+                if name == "skills":
+                    self.copy_skills_tree(src, dst)
+                else:
+                    self.copy_tree(src, dst)
                 if name == "skills":
                     # 对特别的 skills 目录执行后处理过滤逻辑
                     prune_unconfigured_skills(dst)
@@ -243,6 +267,8 @@ def prune_unconfigured_skills(skills_dir: Path) -> None:
         
     for item in skills_dir.iterdir():
         if not item.is_dir():
+            continue
+        if item.name.startswith(PRESERVED_SKILL_DIR_PREFIX):
             continue
             
         # 不在 installable 白名单 或者 在 excluded 黑名单，则踢出目标项
