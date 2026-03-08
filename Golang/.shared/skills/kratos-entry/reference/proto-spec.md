@@ -155,11 +155,14 @@ message ReviewAccountRequest {
     string reason_text = 2;
   }
 
-  uint32 account_id = 1 [(validate.rules).uint32 = {gte: 1}];
+  uint32 id = 1 [(validate.rules).uint32 = {gte: 1}];
   uint32 action = 2 [(validate.rules).uint32 = {gte: 1, lte: 2}];
   repeated RejectPageItem reject_page_list = 3;
 }
 ```
+
+当 request 或 message 已经明确处在聚合根语境里时，主对象 ID 直接使用 `id`。
+只有跨聚合根引用、关联字段或过滤条件需要区分对象归属时，才使用 `account_id` 这类命名。
 
 ## 开放侧基础协议复用示例
 

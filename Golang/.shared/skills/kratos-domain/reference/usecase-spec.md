@@ -90,6 +90,22 @@ func (u *AccountUseCase) Review(ctx context.Context, id uint32, action openenum.
 }
 ```
 
+聚合级删除由 UseCase 编排，Repo 只提供原子删除方法。
+
+```go
+func (u *AccountUseCase) DeleteAccount(ctx context.Context, id uint32) error {
+    return u.tx.InTx(ctx, func(ctx context.Context) error {
+        if err := u.accountFlowFieldRepo.DeleteByAccountID(ctx, id); err != nil {
+            return err
+        }
+        if err := u.accountFlowPageRepo.DeleteByAccountID(ctx, id); err != nil {
+            return err
+        }
+        return u.accountRepo.DeleteAccount(ctx, id)
+    })
+}
+```
+
 ## 显式入参模式
 
 ```go

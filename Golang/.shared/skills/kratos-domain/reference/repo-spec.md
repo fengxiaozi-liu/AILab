@@ -243,6 +243,44 @@ func (r *accountRepo) UpdateAccountStatus(ctx context.Context, id uint32, status
 
 相比 `UpdateOneID(id)`，这类写法更适合作为默认更新模板，尤其是在只需要按条件更新并直接执行的 Repo 场景里。
 
+反例：在单个 Repo 方法中删除整个聚合。
+
+```go
+func (r *accountRepo) DeleteAccountAggregate(ctx context.Context, id uint32) error {
+    _, _ = r.data.Db.AccountCollect(ctx).Delete().Where(accountcollect.AccountID(id)).Exec(ctx)
+    _, _ = r.data.Db.Account(ctx).Delete().Where(account.ID(id)).Exec(ctx)
+    return nil
+}
+```
+
+正例：Repo 只提供原子删除方法，由 UseCase 组合调用。
+
+```go
+func (r *accountRepo) DeleteAccount(ctx context.Context, id uint32) error {
+    affected, err := r.data.Db.Account(ctx).
+        Delete().
+        Where(account.ID(id)).
+        Exec(ctx)
+    if err != nil {
+        return err
+    }
+    if affected == 0 {
+        return openerror.ErrorAccountNotFound(ctx)
+    }
+    return nil
+}
+```
+
+```go
+func (r *accountCollectRepo) DeleteByAccountID(ctx context.Context, id uint32) error {
+    _, err := r.data.Db.AccountCollect(ctx).
+        Delete().
+        Where(accountcollect.AccountID(id)).
+        Exec(ctx)
+    return err
+}
+```
+
 ## 相关 Rule
 
 - `../rules/repo-rule.md`

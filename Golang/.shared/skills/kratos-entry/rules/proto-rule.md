@@ -17,6 +17,7 @@
 - `base/*` 属于基础公共协议层，可被任意 side 引用，但不参与业务 side 隔离冲突判定。
 - `base/*` 只承载稳定公共结构，例如 `Paging`、`Sort`、`TimeRange`、`TransField`。
 - 聚合根主对象使用顶层 message；仅服务于单个 RPC 的局部结构使用嵌套 message。
+- 聚合根主 request 或 message 中的主对象 ID 优先使用 `id`，不要重复追加聚合根前缀。
 
 ## Prohibit
 

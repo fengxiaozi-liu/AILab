@@ -132,6 +132,24 @@ message Account {
 }
 ```
 
+当聚合根语境已经明确时，主对象 ID 直接使用 `id`，不要重复追加聚合根前缀。
+
+正例：
+
+```proto
+message DeleteAccountRequest {
+  uint32 id = 1;
+}
+```
+
+反例：
+
+```proto
+message DeleteAccountRequest {
+  uint32 account_id = 1;
+}
+```
+
 ### 字段后缀示例
 
 - 单对象字段常见为 `_info`
@@ -201,6 +219,8 @@ func NewAccountUseCase(repo AccountRepo) *AccountUseCase
 - `UseCase` 名称优先表达“这个业务对象负责什么流程”
 - 方法名再表达具体动作
 - 如果 `UseCase` 自身已经是动作词，通常说明领域对象还没有被识别清楚
+- 在 `AccountUseCase.DeleteAccount(ctx, id uint32)` 这类聚合根语境中，主对象标识直接使用 `id`
+- 只有 `DeleteByAccountID` 这类跨对象引用或关联资源场景才使用 `AccountID`
 
 ## Repo 命名
 
@@ -234,6 +254,8 @@ func NewAccountRepo(data *kit.Data) AccountRepo
 - Repo 命名优先表达“维护哪个领域对象”
 - 不要把筛选条件、页面语义、协议语义塞进 Repo 类型名
 - 如果 Repo 名称只对应某个接口动作，后续通常很难复用
+- 在 `AccountRepo.GetAccount(ctx, id uint32)` 这类聚合根语境中，主对象标识直接使用 `id`
+- 只有跨对象引用、从属资源删除或过滤条件才使用 `AccountID`
 
 ## Service 命名
 
