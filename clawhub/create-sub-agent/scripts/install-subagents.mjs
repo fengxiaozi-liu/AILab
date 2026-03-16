@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+
+const defaultConfigPath = path.join(os.homedir(), ".openclaw", "openclaw.json");
 
 function parseArgs(argv) {
   const args = {
-    configPath: "./openclaw.json",
+    configPath: defaultConfigPath,
     mainAgentId: "main",
     workspaceRoot: ".",
     roles: [],
@@ -73,7 +77,7 @@ function printHelp() {
   node .agents/skills/create-sub-agent/scripts/install-subagents.mjs [--config <path>] [--main-agent <id>] [--workspace-root <dir>] [--roles <ids>]
 
 Options:
-  --config          Path to openclaw.json
+  --config          Path to openclaw.json (default: ~/.openclaw/openclaw.json)
   --main-agent      Main agent id that will be allowed to spawn workflow sub-agents
   --workspace-root  Root directory where workspace-* folders will be created
   --roles           Required. Comma-separated role ids or id:name entries to install
@@ -142,19 +146,23 @@ function ensureMainAgent(agents, mainAgentId, workspaceRoot) {
   let mainIndex = findAgentIndex(nextAgents, mainAgentId);
 
   if (mainIndex === -1) {
-    const mainAgent = {
-      id: mainAgentId,
-      workspace: path.join(workspaceRoot, `workspace-${mainAgentId}`),
-      subagents: { allowAgents: [] },
-    };
-    if (mainAgentId === "main") {
-      mainAgent.default = true;
-    }
-    nextAgents.push(mainAgent);
-    mainIndex = nextAgents.length - 1;
+    throw new Error(
+      `Main agent "${mainAgentId}" not found in config. Create/configure the main agent first before installing sub-agents.`,
+    );
   }
 
   return { agents: nextAgents, mainIndex };
+}
+
+function ensureAgentExists(role, workspace, cwd) {
+  execFileSync(
+    "openclaw",
+    ["agents", "add", role.id, "--workspace", workspace, "--non-interactive"],
+    {
+      cwd,
+      stdio: "inherit",
+    },
+  );
 }
 
 function main() {
@@ -172,7 +180,7 @@ function main() {
   config.agents.list ??= [];
 
   const ensured = ensureMainAgent(config.agents.list, args.mainAgentId, workspaceRoot);
-  const agents = ensured.agents;
+  let agents = ensured.agents;
   const mainAgent = agents[ensured.mainIndex];
   const mainWorkspace = resolveWorkspacePath(
     mainAgent.workspace,
@@ -188,15 +196,13 @@ function main() {
     const roleIndex = findAgentIndex(agents, role.id);
 
     if (roleIndex === -1) {
-      agents.push({
-        id: role.id,
-        workspace,
-      });
+      ensureAgentExists(role, workspace, workspaceRoot);
+      const refreshedConfig = readJson(configPath);
+      refreshedConfig.agents ??= {};
+      refreshedConfig.agents.list ??= [];
+      agents = refreshedConfig.agents.list;
     } else if (!agents[roleIndex]?.workspace) {
-      agents[roleIndex] = {
-        ...agents[roleIndex],
-        workspace,
-      };
+      agents[roleIndex] = { ...agents[roleIndex], workspace };
     }
 
     allowAgents.add(role.id);
@@ -205,8 +211,12 @@ function main() {
     copyMainSkillsToWorkspace(mainWorkspace, workspace);
   }
 
-  mainAgent.subagents.allowAgents = [...allowAgents].sort();
+  const mainAgentIndex = findAgentIndex(agents, args.mainAgentId);
+  const nextMainAgent = agents[mainAgentIndex];
+  nextMainAgent.subagents ??= {};
+  nextMainAgent.subagents.allowAgents = [...allowAgents].sort();
   config.agents.list = agents;
+  config.agents.list[mainAgentIndex] = nextMainAgent;
 
   writeJson(configPath, config);
 

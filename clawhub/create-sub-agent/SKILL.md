@@ -111,25 +111,28 @@ agent id: developer
 如果调用方已经决定要创建哪些角色，可以通过脚本批量创建，但角色必须显式传入：
 
 ```bash
-node {baseDir}/scripts/install-subagents.mjs --config ./openclaw.json --main-agent main --workspace-root . --roles pm,architect,reviewer
+node {baseDir}/scripts/install-subagents.mjs --main-agent main --workspace-root . --roles pm,architect,reviewer
 ```
 
 如果希望同时传角色 id 和显示名，使用 `id:name`：
 
 ```bash
-node {baseDir}/scripts/install-subagents.mjs --config ./openclaw.json --main-agent main --workspace-root . --roles pm:Product Manager,architect:Architect,reviewer:Code Reviewer
+node {baseDir}/scripts/install-subagents.mjs --main-agent main --workspace-root . --roles pm:Product Manager,architect:Architect,reviewer:Code Reviewer
 ```
 
 脚本行为：
 
-- 按 `--roles` 传入的角色列表创建 sub-agents
+- 先对每个目标角色执行 `openclaw agents add <id> --workspace <dir> --non-interactive`
 - 确保主 agent 存在并允许调度这些 agent
-- 为每个目标 agent 创建独立 workspace
-- 为每个目标 workspace 生成基础 `IDENTITY.md`
+- 为每个目标 workspace 补基础 `IDENTITY.md`
 - 如果主 agent workspace 下存在 `skills/`，则复制一份到每个 sub-agent workspace，已有同名技能默认保留
+
+脚本直接调用 `openclaw` 命令。运行前确保当前环境可以直接执行 `openclaw`。
 
 角色必须由调用方显式传入。  
 不允许依赖脚本内置默认角色集合。
+
+如果未显式传 `--config`，默认读取 `~/.openclaw/openclaw.json`。
 
 ## openclaw.json 需要改什么
 
@@ -193,12 +196,11 @@ node {baseDir}/scripts/install-subagents.mjs --config ./openclaw.json --main-age
 ## 创建步骤
 
 1. 获取调用方传入的模板，或向用户补问生成模板
-2. 在 `openclaw.json` 新增 `agents.list[]`
+2. 先使用 `openclaw agents add` 创建 agent
 3. 给主 agent 的 `subagents.allowAgents` 加上新 agent id
-4. 创建对应 workspace
-5. 需要的话补 `IDENTITY.md`
-6. 如果主 agent workspace 有 `skills/`，复制到子 agent workspace
-7. 验证主 agent 能通过 `sessions_spawn(agentId=...)` 转交给它
+4. 补写对应 workspace 的 `IDENTITY.md`
+5. 如果主 agent workspace 有 `skills/`，复制到子 agent workspace
+6. 验证主 agent 能通过 `sessions_spawn(agentId=...)` 转交给它
 
 ## 不要这样做
 

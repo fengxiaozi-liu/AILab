@@ -1,9 +1,9 @@
 ---
-name: workflow-skill
+name: agent-orchestrator
 description: 用于 OpenClaw 中枢式多 agent 工作流编排。适用于一个主 agent 接收任务后，按任务类型把工作流转给产品经理、UI 设计、架构、开发、代码审查、项目管理等子 agent，并在主 agent 汇总结果的场景。触发关键词包括多 agent 流转、工作流编排、sessions_spawn、跨角色协作、需求分析到实现、项目跟踪。
 ---
 
-# Workflow Skill
+# Workflow
 
 用于 OpenClaw 的“主 agent 做中枢，子 agent 做叶子任务”模式。
 
