@@ -104,19 +104,43 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function ensureIdentityFile(workspace, role) {
-  const identityPath = path.join(workspace, "IDENTITY.md");
-  if (fs.existsSync(identityPath)) {
-    return;
-  }
-  const content = `# ${role.name}
+const IDENTITY_BLOCK_START = "<!-- OPENCLAW:ROLE-IDENTITY:START -->";
+const IDENTITY_BLOCK_END = "<!-- OPENCLAW:ROLE-IDENTITY:END -->";
+
+function buildManagedIdentityBlock(role) {
+  return `${IDENTITY_BLOCK_START}
+# ${role.name}
 
 Role id: ${role.id}
 
 This workspace belongs to the ${role.name} agent.
 Focus on the responsibilities implied by the role name and the task received from the main agent.
-`;
-  fs.writeFileSync(identityPath, content, "utf8");
+${IDENTITY_BLOCK_END}`;
+}
+
+function ensureIdentityFile(workspace, role) {
+  const identityPath = path.join(workspace, "IDENTITY.md");
+  const managedBlock = buildManagedIdentityBlock(role);
+
+  if (!fs.existsSync(identityPath)) {
+    fs.writeFileSync(identityPath, `${managedBlock}\n`, "utf8");
+    return;
+  }
+
+  const existing = fs.readFileSync(identityPath, "utf8");
+  const start = existing.indexOf(IDENTITY_BLOCK_START);
+  const end = existing.indexOf(IDENTITY_BLOCK_END);
+
+  if (start !== -1 && end !== -1 && end > start) {
+    const before = existing.slice(0, start).replace(/\s*$/, "");
+    const after = existing.slice(end + IDENTITY_BLOCK_END.length).replace(/^\s*/, "");
+    const parts = [before, managedBlock, after].filter(Boolean);
+    fs.writeFileSync(identityPath, `${parts.join("\n\n")}\n`, "utf8");
+    return;
+  }
+
+  const separator = existing.trim().length === 0 ? "" : "\n\n";
+  fs.writeFileSync(identityPath, `${existing.replace(/\s*$/, "")}${separator}${managedBlock}\n`, "utf8");
 }
 
 function resolveWorkspacePath(workspace, configDir, fallbackPath) {

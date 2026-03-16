@@ -124,7 +124,7 @@ node {baseDir}/scripts/install-subagents.mjs --main-agent main --workspace-root 
 
 - 先对每个目标角色执行 `openclaw agents add <id> --workspace <dir> --non-interactive`
 - 确保主 agent 存在并允许调度这些 agent
-- 为每个目标 workspace 补基础 `IDENTITY.md`
+- 为每个目标 workspace 写入或更新 `IDENTITY.md` 中的受管角色片段；如果文件里已有其他手写内容，则保留，只插入或替换受管片段
 - 如果主 agent workspace 下存在 `skills/`，则复制一份到每个 sub-agent workspace，已有同名技能默认保留
 
 脚本直接调用 `openclaw` 命令。运行前确保当前环境可以直接执行 `openclaw`。
