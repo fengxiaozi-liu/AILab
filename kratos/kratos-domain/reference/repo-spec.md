@@ -1,292 +1,158 @@
-# Repo Reference
+﻿# Repo Spec
 
-## 这个主题解决什么问题
-
-说明 Repo 如何围绕聚合根组织查询、relation 装配和跨服务补全，以及常见的实现模板。
-
-## 适用场景
-
-- 新增或改造 Repo 接口
-- 实现列表、分页、详情查询
-- 区分本地关联和跨服务 relation
-
-## 设计意图
-
-Repo 参考的重点是解释查询、关系装配和跨服务补全为什么要组织成稳定骨架，而不是把每个接口都写成独立查询脚本。
-
-- 四段式结构让过滤、查询配置、本地 relation 和远程 relation 各自演进。
-- 列表和详情共享同一查询骨架后，更容易复用现有实现，而不是重新拼一套逻辑。
-- relation 收口在 Repo 后，UseCase 可以持续保持业务编排角色，不需要关心装配细节。
-
-## 实施提示
-
-- 先画出“过滤 -> 查询配置 -> 本地 relation -> 远程 relation”的数据流。
-- 优先复用已有聚合的查询骨架，再补本次差异化字段和 relation。
-- 看到列表和详情在重复装配同一关系时，优先提炼共享装配函数。
-
-## 推荐结构
-
-Repo 查询通常按四段组织：
-
-1. `parseFilter(...)`
-2. `queryConfig(...)`
-3. `queryRelation(...)`
-4. `serviceRelation(...)`
-
-## 典型实现方式
-
-### 单对象查询
+## 四段式 Repo 骨架
 
 ```go
-func (r *accountRepo) GetAccount(ctx context.Context, id uint32, opts ...filter.Option) (*biz.Account, error) {
-    query := r.data.Db.Account(ctx).Query().Where(entaccount.IDEQ(id))
-    query = r.parseFilter(query, nil)
-    query = r.queryConfig(query, opts...)
-
-    info, err := query.First(ctx)
-    if err != nil {
-        return nil, err
-    }
-
-    res := r.queryRelation(accountConvert(info), info.Edges)
-    if err := r.serviceRelation(ctx, res, opts...); err != nil {
-        return nil, err
-    }
-
-    return res, nil
-}
-```
-
-### 列表查询
-
-```go
-func (r *accountRepo) ListAccount(ctx context.Context, f *biz.AccountFilter, opts ...filter.Option) ([]*biz.Account, error) {
+// ✅ 标准四段式结构
+func (r *accountRepo) GetAccountList(ctx context.Context, opts ...filter.Option) ([]*biz.Account, error) {
+    // 1. parseFilter - 解析 opts 构建过滤条件
+    filterOpts := filter.ParseOptions(opts...)
+    
+    // 2. queryConfig - 构建 Ent 查询（Where / Order / Limit / WithEdges）
     query := r.data.Db.Account(ctx).Query()
-    query = r.parseFilter(query, f)
-    query = r.queryConfig(query, opts...)
-
+    query = r.queryConfig(query, filterOpts)
+    
+    // 3. queryRelation - 装配 Ent Edge 关联（来自 WithEdges 预加载）
     list, err := query.All(ctx)
-    if err != nil {
-        return nil, err
-    }
-
-    res := make([]*biz.Account, 0, len(list))
+    if err != nil { return nil, err }
+    result := make([]*biz.Account, 0, len(list))
     for _, item := range list {
-        res = append(res, r.queryRelation(accountConvert(item), item.Edges))
+        result = append(result, r.queryRelation(accountConvert(item), item.Edges))
     }
-
-    if err := r.serviceRelation(ctx, res, opts...); err != nil {
-        return nil, err
-    }
-
-    return res, nil
+    
+    // 4. serviceRelation - 通过 Depend/RPC 补查跨服务关联
+    if err := r.serviceRelation(ctx, result, filterOpts); err != nil { return nil, err }
+    return result, nil
 }
 ```
 
-## 本地关联装配
+---
+
+## Update 方式决策
+
+| 条件 | 方式 |
+|------|------|
+| 已有对象，单主键更新 | `UpdateOneID(id)` |
+| 批量更新 / 无对象实例 / 条件更新 | `Update().Where(IDEQ(id))` |
 
 ```go
-func (r *accountRepo) queryConfig(query *ent.AccountQuery, opts ...filter.Option) *ent.AccountQuery {
-    cfg := filter.NewConfig(opts...)
-    if _, ok := cfg.Relations[openenum.AccountCollectRelation]; ok {
+// ✅ 单主键更新，已知 ID
+return r.data.Db.Account(ctx).UpdateOneID(id).
+    SetStatus(openenum.AccountStatusOpened).
+    SetUpdateTime(updateTime).
+    Exec(ctx)
+
+// ✅ 条件更新，无对象实例
+return r.data.Db.Account(ctx).Update().
+    Where(entaccount.IDEQ(id), entaccount.StatusEQ(openenum.AccountStatusPending)).
+    SetStatus(openenum.AccountStatusOpened).
+    Exec(ctx)
+
+// ❌ 有主键时仍用 Where 更新，可读性差
+r.data.Db.Account(ctx).Update().
+    Where(entaccount.IDEQ(account.ID)).  // 已有 ID 时用 UpdateOneID 更清晰
+    SetStatus(account.Status).Exec(ctx)
+```
+
+---
+
+## Not Found 处理
+
+```go
+// ✅ not found 返回具体业务错误
+info, err := query.First(ctx)
+if err != nil {
+    if ent.IsNotFound(err) {
+        return nil, openerror.ErrorAccountNotFound(ctx)
+    }
+    return nil, err
+}
+
+// ❌ not found 返回 nil, nil（调用方无法区分是否存在）
+info, err := query.First(ctx)
+if ent.IsNotFound(err) {
+    return nil, nil  // ❌ 禁止 nil-nil
+}
+
+// ⚠️ 列表查询，空集合返回空切片，不视为 not found
+list, err := query.All(ctx)
+if err != nil { return nil, err }
+// len(list) == 0 是合法的空列表，不报错
+```
+
+---
+
+## queryConfig / queryRelation / serviceRelation 私有方法
+
+```go
+// ✅ queryConfig：集中管理查询参数，保持 GetXxx/PageListXxx/ListXxx 一致
+func (r *accountRepo) queryConfig(query *ent.AccountQuery, opts *filter.Options) *ent.AccountQuery {
+    if opts.HasStatus() {
+        query = query.Where(entaccount.StatusIn(opts.Statuses()...))
+    }
+    if opts.HasRelation(openenum.AccountCollectRelation) {
         query = query.WithAccountCollect()
     }
     return query
 }
 
-func (r *accountRepo) queryRelation(info *biz.Account, edges ent.AccountEdges) *biz.Account {
-    if info == nil {
-        return nil
+// ✅ serviceRelation：批量补查外部服务，避免 N+1
+func (r *accountRepo) serviceRelation(ctx context.Context, list []*biz.Account, opts *filter.Options) error {
+    if opts.HasRelation(openenum.AccountCheckUserRelation) {
+        return r.adminUserDepend.FillUsers(ctx, list)
     }
-    if len(edges.AccountCollect) > 0 {
-        info.Collect = accountCollectConvert(edges.AccountCollect[0])
-    }
-    return info
+    return nil
 }
 ```
 
-## 项目通用完整骨架
+---
+
+## 组合场景
 
 ```go
-func (r *accountFlowPageRepo) GetAccountFlowPageByFilter(ctx context.Context, f *openbiz.AccountFlowPageFilter, opts ...filter.Option) (*openbiz.AccountFlowPage, error) {
-    query := r.data.Db.AccountFlowPage(ctx).Query()
-    query = r.parseFilter(query, f)
-    query = r.queryConfig(query, opts...)
+// 完整：PageListAccount 含 queryConfig + queryRelation + serviceRelation
+func (r *accountRepo) PageListAccount(
+    ctx context.Context, pg *page.Page, opts ...filter.Option,
+) ([]*biz.Account, error) {
+    filterOpts := filter.ParseOptions(opts...)
 
-    info, err := query.First(ctx)
-    if err != nil {
-        if ent.IsNotFound(err) {
-            return nil, openerror.ErrorPageNotFound(ctx)
-        }
-        return nil, err
+    query := r.data.Db.Account(ctx).Query()
+    query = r.queryConfig(query, filterOpts)
+
+    total, err := query.Count(ctx)
+    if err != nil { return nil, err }
+    pg.SetTotal(total)
+
+    list, err := query.Offset(pg.Offset()).Limit(pg.Limit()).All(ctx)
+    if err != nil { return nil, err }
+
+    result := make([]*biz.Account, 0, len(list))
+    for _, item := range list {
+        result = append(result, r.queryRelation(accountConvert(item), item.Edges))
     }
 
-    result := r.queryRelation(flowPageConvert(info), info.Edges)
-    if err := r.serviceRelation(ctx, result, opts...); err != nil {
-        return nil, err
-    }
-    return result, nil
-}
-
-func (r *accountFlowPageRepo) ListAccountFlowPage(ctx context.Context, f *openbiz.AccountFlowPageFilter, opts ...filter.Option) ([]*openbiz.AccountFlowPage, error) {
-    query := r.data.Db.AccountFlowPage(ctx).Query()
-    query = r.parseFilter(query, f)
-    query = r.queryConfig(query, opts...)
-
-    list, err := query.All(ctx)
-    if err != nil {
-        return nil, err
-    }
-
-    result := make([]*openbiz.AccountFlowPage, 0, len(list))
-    for _, info := range list {
-        result = append(result, r.queryRelation(flowPageConvert(info), info.Edges))
-    }
-
-    if err := r.serviceRelation(ctx, result, opts...); err != nil {
-        return nil, err
-    }
+    if err := r.serviceRelation(ctx, result, filterOpts); err != nil { return nil, err }
     return result, nil
 }
 ```
 
-## 跨服务 relation 装配
+---
+
+## 常见错误模式
 
 ```go
-func (r *accountRepo) serviceRelation(ctx context.Context, data interface{}, opts ...filter.Option) error {
-    cfg := filter.NewConfig(opts...)
-    if _, ok := cfg.Relations[openenum.AccountCheckUserRelation]; !ok {
-        return nil
-    }
+// ❌ for 循环中 N+1 调用
+for _, account := range accounts {
+    user, _ := r.adminUserDepend.GetUser(ctx, account.CheckAdminUserID)  // ❌ N+1
+    account.CheckAdminUserInfo = user
+}
 
-    if info, ok := data.(*biz.Account); ok {
-        data = []*biz.Account{info}
-    }
-    list := data.([]*biz.Account)
+// ❌ nil-nil 隐藏 not found
+info, err := query.First(ctx)
+if ent.IsNotFound(err) { return nil, nil }  // ❌
 
-    idSet := make(map[uint32]struct{})
-    for _, item := range list {
-        if item == nil {
-            continue
-        }
-        if item.FirstCheckUserID > 0 {
-            idSet[item.FirstCheckUserID] = struct{}{}
-        }
-        if item.SecondCheckUserID > 0 {
-            idSet[item.SecondCheckUserID] = struct{}{}
-        }
-    }
-
-    ids := make([]uint32, 0, len(idSet))
-    for id := range idSet {
-        ids = append(ids, id)
-    }
-
-    userMap, err := r.adminUserRepo.MapAdminUser(ctx, &adminbiz.AdminUserFilter{IDList: ids})
-    if err != nil {
-        return err
-    }
-
-    for _, item := range list {
-        if item == nil {
-            continue
-        }
-        item.FirstCheckUser = userMap[item.FirstCheckUserID]
-        item.SecondCheckUser = userMap[item.SecondCheckUserID]
-    }
-    return nil
+// ❌ Service 或 UseCase 直接拼 Ent 查询
+func (u *AccountUseCase) GetAccount(ctx context.Context, id uint32) (*Account, error) {
+    return u.data.Db.Account(ctx).Query().Where(...).First(ctx)  // ❌ 越层
 }
 ```
-
-## Upsert 示例
-
-```go
-func (r *accountFlowPageRepo) UpsertAccountFlowPage(ctx context.Context, info *openbiz.AccountFlowPage) error {
-    nowTime := uint32(time.Now().Unix())
-
-    return r.data.Db.AccountFlowPage(ctx).
-        Create().
-        SetAccountID(info.AccountID).
-        SetPageCode(info.PageCode).
-        SetStatus(info.Status).
-        SetReviewStage(info.ReviewStage).
-        SetReasonText(info.ReasonText).
-        SetCreateTime(nowTime).
-        SetUpdateTime(nowTime).
-        OnConflict().
-        SetStatus(info.Status).
-        SetReviewStage(info.ReviewStage).
-        SetReasonText(info.ReasonText).
-        SetUpdateTime(nowTime).
-        Exec(ctx)
-}
-```
-
-## 常见坑
-
-- 本地 edge 和跨服务 relation 混在一个阶段处理
-- 详情和列表各写一套装配逻辑
-- 为某个接口单独返回临时 DTO，导致模型漂移
-- 更新后立刻取回实体，但实际上并不需要更新后的完整对象
-
-## 更新写法示例
-
-```go
-func (r *accountRepo) UpdateAccountStatus(ctx context.Context, id uint32, status openenum.AccountStatus) error {
-    return r.data.Db.Account(ctx).
-        Update().
-        Where(entaccount.IDEQ(id)).
-        SetStatus(status).
-        Exec(ctx)
-}
-```
-
-相比 `UpdateOneID(id)`，这类写法更适合作为默认更新模板，尤其是在只需要按条件更新并直接执行的 Repo 场景里。
-
-反例：在单个 Repo 方法中删除整个聚合。
-
-```go
-func (r *accountRepo) DeleteAccountAggregate(ctx context.Context, id uint32) error {
-    _, _ = r.data.Db.AccountCollect(ctx).Delete().Where(accountcollect.AccountID(id)).Exec(ctx)
-    _, _ = r.data.Db.Account(ctx).Delete().Where(account.ID(id)).Exec(ctx)
-    return nil
-}
-```
-
-正例：Repo 只提供原子删除方法，由 UseCase 组合调用。
-
-```go
-func (r *accountRepo) DeleteAccount(ctx context.Context, id uint32) error {
-    affected, err := r.data.Db.Account(ctx).
-        Delete().
-        Where(account.ID(id)).
-        Exec(ctx)
-    if err != nil {
-        return err
-    }
-    if affected == 0 {
-        return openerror.ErrorAccountNotFound(ctx)
-    }
-    return nil
-}
-```
-
-```go
-func (r *accountCollectRepo) DeleteByAccountID(ctx context.Context, id uint32) error {
-    _, err := r.data.Db.AccountCollect(ctx).
-        Delete().
-        Where(accountcollect.AccountID(id)).
-        Exec(ctx)
-    return err
-}
-```
-
-## 相关 Rule
-
-- `../rules/repo-rule.md`
-- `../rules/domain-security-rule.md`
-
-## 相关 Reference
-
-- `./usecase-spec.md`
-- `../../kratos-components/reference/depend-spec.md`

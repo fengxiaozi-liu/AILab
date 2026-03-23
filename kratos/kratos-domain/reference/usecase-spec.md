@@ -1,158 +1,140 @@
-# UseCase Reference
+﻿# UseCase Spec
 
-## 这个主题解决什么问题
-说明 UseCase 如何围绕业务流程组织编排、事务、权限和 relation 需求，以及应用层输入输出对象如何作为聚合根的应用层投影存在。
+## 职责归属决策
 
-## 适用场景
+| 逻辑 | 归属 |
+|------|------|
+| 状态校验、权限判断 | UseCase |
+| 事务边界管理 | UseCase |
+| 关联对象的查询装配 | Repo（通过 opts 委托） |
+| 跨聚合根数据补充 | Repo.serviceRelation |
+| 协议字段转换 | Service |
+| 数据库 CRUD | Repo |
 
-- 新增或修改 UseCase 方法
-- 设计事务边界和状态流转
-- 设计应用层输入输出对象
-- 判断 relation 需求由谁决定
+---
 
-## 设计意图
-
-UseCase 负责业务编排，不负责底层装配细节。
-
-- UseCase 是应用层，不是协议层。
-- 应用层输入输出对象与 `proto message` 是聚合根的同源平级产物。
-- 应用层输入输出对象负责表达业务编排需要的输入输出。
-- `proto message` 负责表达协议层契约。
-
-## 实施提示
-
-- 先按业务步骤描述流程，再决定哪些步骤放进事务。
-- 先确定需要哪些 relation，再通过 `opts` 把需求传给 Repo。
-- 如果应用层输入输出对象的字段设计只是机械复制 `proto`，通常说明应用层表达还没有围绕聚合根收敛。
-
-## 推荐结构
-
-UseCase 负责：
-
-- 业务编排
-- 权限校验
-- 状态流转
-- 事务边界
-- relation 需求声明
-
-UseCase 不直接实现 relation 查询细节，而是通过 `opts ...filter.Option` 影响 Repo 行为。
-
-## 应用层输入输出对象的定位
-
-常见顺序：
-
-1. 先识别实体与聚合根
-2. 再定义应用层输入输出对象
-3. 再定义对应的 `proto message`
-4. 最后在 service 层做应用层 DTO 与协议层 message 的转换
-
-常见理解：
-
-- 应用层输入输出对象是聚合根的应用层投影
-- `proto message` 是聚合根的协议层投影
-- 两者平级，不互相从属
-- 如无歧义，应用层对象直接使用聚合根名称，不额外追加 `DTO` 后缀
-
-## 标准模板
-
-### 只读查询
+## opts 委托 relation 查询
 
 ```go
-func (u *AccountUseCase) GetAccount(ctx context.Context, id uint32, opts ...filter.Option) (*Account, error) {
-    return u.accountRepo.GetAccount(ctx, id, opts...)
-}
-```
-
-### 业务强依赖 relation
-
-```go
-func (u *AccountUseCase) GetAccountWithRequiredRelation(ctx context.Context, id uint32) (*Account, error) {
-    opts := []filter.Option{
-        filter.WithRelation(openenum.AccountCollectRelation),
-    }
-    return u.accountRepo.GetAccount(ctx, id, opts...)
-}
-```
-
-### 写操作与事务
-
-```go
-func (u *AccountUseCase) Review(ctx context.Context, id uint32, action openenum.ReviewAction) error {
-    return u.tx.InTx(ctx, func(ctx context.Context) error {
-        account, err := u.accountRepo.GetAccount(ctx, id)
-        if err != nil {
-            return err
-        }
-
-        account.Status = openenum.AccountStatusReviewed
-        return u.accountRepo.UpdateAccount(ctx, account)
-    })
-}
-```
-
-聚合级删除由 UseCase 编排，Repo 只提供原子删除方法。
-
-```go
-func (u *AccountUseCase) DeleteAccount(ctx context.Context, id uint32) error {
-    return u.tx.InTx(ctx, func(ctx context.Context) error {
-        if err := u.accountFlowFieldRepo.DeleteByAccountID(ctx, id); err != nil {
-            return err
-        }
-        if err := u.accountFlowPageRepo.DeleteByAccountID(ctx, id); err != nil {
-            return err
-        }
-        return u.accountRepo.DeleteAccount(ctx, id)
-    })
-}
-```
-
-## 显式入参模式
-
-```go
-func (s *AccountService) GetOpenStatus(ctx context.Context, req *v1.GetOpenStatusRequest) (*v1.GetOpenStatusReply, error) {
-    userCode := strconv.FormatUint(uint64(metadata.GetViewerID(ctx)), 10)
-    status, err := s.accountUseCase.GetOpenStatus(ctx, userCode)
-    if err != nil {
-        return nil, err
-    }
-    return &v1.GetOpenStatusReply{OpenStatus: uint32(status)}, nil
-}
-```
-
-## 代码示例参考
-
-```go
-type Account struct {
-    ID                  uint32                 `json:"id"`
-    Status              openenum.AccountStatus `json:"status"`
-    CreateTime          uint32                 `json:"create_time"`
-    FirstCheckUserInfo  *adminbiz.AdminUser    `json:"first_check_user_info"`
-    AccountCollectInfo  *AccountCollect        `json:"account_collect_info"`
-    AccountFlowPageList []*AccountFlowPage     `json:"account_flow_page_list"`
-}
-
+// ✅ opts 委托：UseCase 通知 Repo 加载哪些 relation
 func (u *AccountUseCase) GetAccountDetail(ctx context.Context, id uint32) (*Account, error) {
-    opts := []filter.Option{
+    return u.accountRepo.GetAccount(ctx, id,
         filter.WithRelation(openenum.AccountCollectRelation),
         filter.WithRelation(openenum.AccountCheckUserRelation),
-    }
-    return u.accountRepo.GetAccount(ctx, id, opts...)
+    )
+}
+
+// ❌ UseCase 自行调用 Repo/Depend 补查（破坏四段式）
+func (u *AccountUseCase) GetAccountDetail(ctx context.Context, id uint32) (*Account, error) {
+    account, err := u.accountRepo.GetAccount(ctx, id)
+    if err != nil { return nil, err }
+    user, err := u.adminUserDepend.GetUser(ctx, account.CheckAdminUserID)  // ❌ UseCase 补查
+    account.CheckAdminUserInfo = user
+    return account, nil
 }
 ```
 
-## 常见坑
+---
 
-- 在 UseCase 里直接补查 reviewer、customer、collect 等 relation
-- 通过 `context` 偷读身份而不是显式入参
-- 应用层对象和 `proto message` 同时各维护一套近义结构
-- 让调用方通过判空去猜业务状态
+## 事务边界
 
-## 相关 Rule
+```go
+// ✅ 事务在 UseCase 管理
+func (u *AccountUseCase) OpenAccount(ctx context.Context, req *OpenAccountReq) error {
+    return u.data.WithTx(ctx, func(ctx context.Context) error {
+        if err := u.accountRepo.Create(ctx, req); err != nil { return err }
+        if err := u.accountCollectRepo.Create(ctx, req.Collect); err != nil { return err }
+        return u.eventBus.Publish(ctx, &eventbus.Event{
+            Topic:   openenum.LocalEventAccountAfterOpen.Value(),
+            Payload: req,
+        })
+    })
+}
 
-- `../rules/usecase-rule.md`
-- `../rules/layer-rule.md`
+// ❌ 事务在 Repo 中开启（Repo 不应管理事务边界）
+func (r *accountRepo) Create(ctx context.Context, req *biz.OpenAccountReq) error {
+    return r.data.WithTx(ctx, func(ctx context.Context) error { ... })  // ❌
+}
 
-## 相关 Reference
+// ⚠️ 只写一个表：不需要事务
+func (u *AccountUseCase) UpdateStatus(ctx context.Context, id uint32, status openenum.AccountOpenStatus) error {
+    return u.accountRepo.UpdateStatus(ctx, id, status)  // ✅ 单操作不需要 tx
+}
+```
 
-- `./aggregate-spec.md`
-- `./repo-spec.md`
+---
+
+## 状态流转守卫
+
+```go
+// ✅ UseCase 校验前置状态
+func (u *AccountUseCase) Review(ctx context.Context, id uint32, pass bool) error {
+    account, err := u.accountRepo.GetAccount(ctx, id)
+    if err != nil { return err }
+    if account.OpenStatus != openenum.AccountOpenStatusPending {
+        return openerror.ErrorAccountStatusInvalid(ctx)
+    }
+    newStatus := openenum.AccountOpenStatusRejected
+    if pass { newStatus = openenum.AccountOpenStatusOpened }
+    return u.accountRepo.UpdateStatus(ctx, id, newStatus)
+}
+
+// ❌ 跳过状态校验直接更新
+func (u *AccountUseCase) Review(ctx context.Context, id uint32, pass bool) error {
+    return u.accountRepo.UpdateStatus(ctx, id, openenum.AccountOpenStatusOpened)  // ❌ 无守卫
+}
+```
+
+---
+
+## 组合场景
+
+```go
+// 完整 UseCase：包含状态守卫 + 事务 + ops 委托
+func (u *AccountUseCase) PassReview(ctx context.Context, id uint32) error {
+    // 1. 加载（不含 relation，仅需状态字段）
+    account, err := u.accountRepo.GetAccount(ctx, id)
+    if err != nil { return err }
+
+    // 2. 状态守卫
+    if account.OpenStatus != openenum.AccountOpenStatusPending {
+        return openerror.ErrorAccountStatusInvalid(ctx)
+    }
+
+    // 3. 事务：更新状态 + 发送事件
+    return u.data.WithTx(ctx, func(ctx context.Context) error {
+        if err := u.accountRepo.UpdateStatus(ctx, id, openenum.AccountOpenStatusOpened); err != nil {
+            return err
+        }
+        return u.eventBus.Publish(ctx, &eventbus.Event{
+            Topic:   openenum.LocalEventAccountAfterOpen.Value(),
+            Payload: account,  // ✅ 直接传聚合对象
+        })
+    })
+}
+```
+
+---
+
+## 常见错误模式
+
+```go
+// ❌ UseCase 构造查询直接访问 DB
+func (u *AccountUseCase) GetAccount(ctx context.Context, id uint32) (*Account, error) {
+    return u.data.Db.Account(ctx).Query().Where(entaccount.IDEQ(id)).First(ctx)
+}
+
+// ❌ UseCase 手动补查 relation（应通过 opts 委托给 Repo）
+func (u *AccountUseCase) GetDetail(ctx context.Context, id uint32) (*Account, error) {
+    account, _ := u.accountRepo.GetAccount(ctx, id)
+    account.Collect, _ = u.accountCollectRepo.GetByAccountID(ctx, id)  // ❌
+    return account, nil
+}
+
+// ❌ 业务重复查询（一次 Get 后又 Get 一次）
+func (u *AccountUseCase) Review(ctx context.Context, id uint32, pass bool) error {
+    if _, err := u.accountRepo.GetAccount(ctx, id); err != nil { return err }  // 第一次
+    account, err := u.accountRepo.GetAccount(ctx, id)  // ❌ 重复
+    ...
+}
+```

@@ -1,92 +1,45 @@
-# I18n Reference
+﻿# I18n Spec
 
-## 这个主题解决什么问题
+## Key 设计
 
-说明错误文案和业务文案的 i18n key 如何设计，以及翻译文件通常如何生成。
-
-## 适用场景
-
-- 新增 i18n key
-- 调整文案结构
-- 维护翻译生成流程
-
-## 设计意图
-
-i18n 参考主要解释文案为什么要围绕稳定 key 组织，而不是围绕原文直接散落在代码里。
-
-- 稳定 key 能把业务语义、错误表达和多语言文案统一起来。
-- 理解 key 是语义标识后，更容易避免把界面文案直接嵌入业务流程。
-- 文案与 key 分离后，翻译、审校和替换描述都会更轻量。
-
-## 实施提示
-
-- 先确定 key 想表达的业务语义，再写默认文案。
-- 先复用已有 key 前缀和模块划分，再新增条目。
-- 如果文本会同时出现在错误、提示和 UI 上，优先确认是否共享同一语义 key。
-
-## 推荐结构
-
-- key 按语义命名，不按页面临时文案命名
-- 由源语言文件生成其他语言版本
-
-## 典型流程
-
-```text
-goi18n extract
--> translate.py (--template)
--> 覆盖目标翻译文件
-```
-
-## 脚本调用示例
-
-从源语言文件抽取：
-
-```powershell
-goi18n extract -outdir .\assets\i18n -sourceLanguage zh-CN
-```
-
-从中文模板翻译英文：
-
-```powershell
-python .\tools\translate\translate.py .\assets\i18n\active.zh-CN.toml zh-CN en
-```
-
-带已有模板增量翻译：
-
-```powershell
-python .\tools\translate\translate.py .\assets\i18n\active.zh-CN.toml zh-CN en --template .\assets\i18n\active.en.toml
-```
-
-输出结果：
-
-```text
-assets/i18n/active.{fromLanguage}-{toLanguage}.toml
-```
-
-## Key 设计示例
-
-```text
-ERROR_ORDER_NOT_FOUND
-ACCOUNT_OPEN_STATUS_PENDING
-```
-
-## 标准模板
+| 条件 | 做法 |
+|------|------|
+| 错误文案 | `ERROR_{MODULE}_{DESCRIPTION}` |
+| 枚举展示文案 | `ENUM_{TYPE}_{VALUE}` |
+| 业务提示文案 | 按语义命名，不按页面路径命名 |
 
 ```go
-func AccountStatusText(ctx context.Context) string {
-    localizer := context2.GetLocalize(ctx)
-    return localize.LocalizeOrUseOther(localizer, &i18n.LocalizeConfig{
-        DefaultMessage: &i18n.Message{
-            ID:    "ACCOUNT_OPEN_STATUS_PENDING",
-            Other: "待开户",
-        },
-    })
-}
+// ✅ Key 按语义稳定命名
+&i18n.Message{ID: "ERROR_OPEN_ACCOUNT_NOT_FOUND", Other: "开户申请不存在"}
+&i18n.Message{ID: "ENUM_OPEN_STATUS_INIT", Other: "初始化"}
+&i18n.Message{ID: "ACCOUNT_OPEN_STATUS_PENDING", Other: "待开户"}
+
+// ❌ Key 按页面路径或临时描述命名，不稳定
+&i18n.Message{ID: "page_open_form_error_1", Other: "不存在"}
+&i18n.Message{ID: "status_text_3", Other: "待审核"}
 ```
 
-## 项目通用错误文案示例
+---
+
+## 翻译生成流程
+
+```text
+// ✅ 正确流程
+goi18n extract -outdir ./assets/i18n -sourceLanguage zh-CN
+-> python tools/translate/translate.py ./assets/i18n/active.zh-CN.toml zh-CN en
+-> 产出 assets/i18n/active.zh-CN-en.toml
+-> 合并/重命名为 active.en.toml
+
+// ❌ 直接手改 active.*.toml 产物
+// 下次 extract 后改动会被覆盖
+```
+
+---
+
+## 标准用法
 
 ```go
+// ✅ 在错误函数中使用
 func ErrorPageNotFound(ctx context.Context) *errors.Error {
     localizer := context2.GetLocalize(ctx)
     return errors.New(400, "OPEN_PAGE_NOT_FOUND", localize.LocalizeOrUseOther(localizer, &i18n.LocalizeConfig{
@@ -97,39 +50,69 @@ func ErrorPageNotFound(ctx context.Context) *errors.Error {
         },
     }))
 }
-```
 
-## Proto 中的多语言字段
-
-```proto
-import "base/business/v1/business.proto";
-
-message GetLicenseeReply {
-  string logo = 1;
-  string code = 2;
-  base.business.v1.TransField name = 3;
+// ✅ 在枚举 Localize 方法中使用
+func (s AccountOpenStatus) Localize(localizer *i18n.Localizer) string {
+    return localize.LocalizeOrUseOther(localizer, &i18n.LocalizeConfig{
+        DefaultMessage: &i18n.Message{ID: "ENUM_OPEN_STATUS_FILLING", Other: "填写中"},
+    })
 }
 ```
 
-## 本地化上下文示例
+---
+
+## Proto 多语言字段
+
+```proto
+// ✅ 多语言字段使用 TransField
+import "base/business/v1/business.proto";
+message GetLicenseeReply {
+  base.business.v1.TransField name = 1;
+}
+
+// ❌ 每种语言单独一个字段
+message GetLicenseeReply {
+  string name_zh = 1;
+  string name_en = 2;
+}
+```
+
+---
+
+## 组合场景
 
 ```go
+// 完整：key 定义 → 错误函数 → Localize 中间件 → 使用
+// 1. 定义错误函数，key=ERROR_OPEN_ACCOUNT_NOT_FOUND
+func ErrorAccountNotFound(ctx context.Context) *errors.Error { ... }
+
+// 2. middleware 注入 localizer 到 ctx
 func Localize() middleware.Middleware {
     return func(handler middleware.Handler) middleware.Handler {
         return func(ctx context.Context, req interface{}) (interface{}, error) {
-            ctx = context2.SetLocalize(ctx, i18n.NewLocalizer(bundle, "zh-CN"))
+            ctx = context2.SetLocalize(ctx, i18n.NewLocalizer(bundle, metadata.GetLanguage(ctx).ToI18nLanguage()))
             return handler(ctx, req)
         }
     }
 }
+
+// 3. 在 data 层触发转换
+if ent.IsNotFound(err) {
+    return nil, openerror.ErrorAccountNotFound(ctx)
+}
 ```
 
-## 常见坑
+---
 
-- key 直接绑定展示文案，后期难复用
-- 多语言文件来源不一致
-- 错误信息和业务文案混用同一套命名策略但语义不清
+## 常见错误模式
 
-## 相关 Rule
+```go
+// ❌ 原始文案散落业务代码
+return errors.New(404, "NOT_FOUND", "账号不存在")
 
-- `../rules/i18n-rule.md`
+// ❌ 手改 active.en.toml
+// extract 后变动丢失
+
+// ❌ Key 不稳定，带版本号
+&i18n.Message{ID: "error_account_v2_not_found"}
+```

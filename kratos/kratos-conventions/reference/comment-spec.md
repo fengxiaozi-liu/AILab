@@ -1,142 +1,147 @@
-# Comment Reference
+﻿# Comment Spec
 
-## 这个主题解决什么问题
+## 注释位置决策
 
-说明 Kratos 项目中的代码注释、Proto 注释和 Ent 注释通常如何组织，避免“无注释”与“无效注释”两种极端。
+| 位置 | 是否需要注释 |
+|------|------------|
+| 导出类型（struct、interface） | MUST，表达业务角色和能力 |
+| 导出函数/方法 | MUST，用"对象/能力 + 作用"式注释 |
+| Ent schema 表/字段 | MUST，表达业务含义 |
+| proto message/field | 视情况，不加说明性注释和装饰线 |
+| 私有简单赋值 | 不需要 |
+| 关键分支/阶段切换 | 允许短注释 |
 
-## 适用场景
+---
 
-- 新增领域对象、UseCase、Repo、Service
-- 新增 Ent schema、field、table comment
-- 重构代码后同步修正注释
-
-## 设计意图
-
-注释不是为了补救糟糕命名，而是为了表达以下代码本身不容易直接看出的信息：
-
-- 业务角色
-- 能力边界
-- 生命周期职责
-- 状态或字段的业务含义
-- 协议或表结构的外部可见语义
-
-稳定做法是：
-
-- service / usecase / repo / provider 保留简洁的职责注释
-- Ent schema 保留业务语义注释
-- 阶段性长流程使用少量章节注释分段
-
-这类注释通常都很短，一般一行即可说明功能、规则或关键语义。
-在语言选择上，注释默认优先中文，只有外部接口名、标准术语或英文表达更稳定时才保留英文。
-
-## 实施提示
-
-- 先把命名稳定下来，再补注释
-- 注释优先解释“为什么存在”“负责什么”，不是解释“这一行在赋值”
-- 默认写短注释，一般一行足够；只有边界复杂时才补多行
-- 注释优先落在对象定义、入口函数、关键分支、流程阶段切换点
-- 默认优先中文注释，同一文件内风格尽量统一
-- 生成物注释只通过源文件生成，不在生成物手改
-
-## 推荐实现方式
-
-### 1. Service / Provider 注释
+## 导出类型注释
 
 ```go
+// ✅ 表达业务角色，一行简洁说明
+// AccountUseCase 账户聚合根能力
+type AccountUseCase struct { ... }
+
+// ✅ 方法注释表达动作语义
+// Prepare 创建或刷新开户主体。
+func (u *AccountUseCase) Prepare(ctx context.Context, userCode string) (*Account, error) { ... }
+
+// ❌ 重复函数名，无业务含义
+// GetAccount gets the account.
+func (u *AccountUseCase) GetAccount(...) { ... }
+
+// ❌ 空泛注释
+// 处理数据
+func (r *accountRepo) ParseFilter(...) { ... }
+```
+
+---
+
+## Ent schema 注释
+
+```go
+// ✅ 表级注释 + 字段业务含义注释
+func (Account) Fields() []ent.Field {
+    return []ent.Field{
+        field.Uint32("id").Comment("primary id"),
+        field.String("user_code").MaxLen(64).Default("").Comment("user code"),
+        field.Uint8("open_status").Default(0).Comment("open status 1=init 2=filling"),
+        field.Uint32("create_time").Comment("create timestamp"),
+    }
+}
+
+func (Account) Annotations() []schema.Annotation {
+    return []schema.Annotation{schema.Comment("account table")}
+}
+
+// ❌ 字段无注释
+field.Uint8("open_status").Default(0)
+```
+
+---
+
+## proto 注释禁止项
+
+```proto
+// ❌ 加说明性注释
+// 账户服务接口，包含创建、查询、审核功能
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (GetAccountReply);
+}
+
+// ❌ 加装饰线
+// ========================
+// Account RPC
+// ========================
+
+// ✅ 不加注释，或只加极简字段说明（可选）
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (GetAccountReply);
+  rpc ListAccount(ListAccountRequest) returns (ListAccountReply);
+}
+```
+
+---
+
+## 阶段性注释
+
+```go
+// ✅ 只在明显阶段边界加短注释
+func (u *AccountFlowPageUseCase) CommitPage(ctx context.Context, req *CommitPageInput) error {
+    // ----- 1. 权限校验 -----
+    if err := u.checkPermission(ctx, req); err != nil { return err }
+
+    // ----- 2. 构建 store -----
+    store, err := u.buildPageStore(ctx, req)
+    if err != nil { return err }
+
+    // ----- 3. 提交 -----
+    return u.doCommit(ctx, store)
+}
+
+// ❌ 每行都加注释，正文被注释淹没
+// 获取 account
+account, err := u.repo.GetAccount(ctx, id)
+// 检查 err
+if err != nil {
+    // 返回 err
+    return err
+}
+```
+
+---
+
+## 组合场景
+
+```go
+// ProviderSet + Service + UseCase + Repo 完整注释示例
 // ProviderSet 服务提供集合
 var ProviderSet = wire.NewSet(NewAccountService)
 
 // AccountService 实现 admin 侧账户服务接口。
 type AccountService struct {
-    ...
-}
-
-// NewAccountService 创建账户服务。
-func NewAccountService(...) *AccountService {
-    ...
-}
-```
-
-### 2. Domain / UseCase 注释
-
-```go
-// Account 领域模型
-type Account struct {
-    ...
+    v1.UnimplementedAccountServer
+    uc *biz.AccountUseCase
 }
 
 // AccountUseCase 账户聚合根能力
-type AccountUseCase struct {
-    ...
-}
+type AccountUseCase struct { ... }
 
-// Prepare 创建或刷新开户主体。
-func (u *AccountUseCase) Prepare(ctx context.Context, userCode string) (*Account, error) {
-    ...
-}
+// Review 执行账户审核流程。
+func (u *AccountUseCase) Review(ctx context.Context, id uint32, action openenum.ReviewAction) error { ... }
 ```
 
-### 3. 关键位置注释
+---
+
+## 常见错误模式
 
 ```go
-// ----- Commit flow helpers -----
-func (u *AccountFlowPageUseCase) buildPageStore(...) *Store {
-    ...
-}
+// ❌ 过期实现细节长期保留
+// TODO: 临时方案，等接口对齐后删除（2022-01-01）
+
+// ❌ 在生成物上手改注释（ent/account.go、wire_gen.go）
+
+// ❌ 注释与现有命名不一致
+// GetUser 返回账户信息  ← 函数名叫 GetAccount，注释说 User
+
+// ❌ proto 加分隔线装饰
+// ==================== Account ====================
 ```
-
-### 4. Ent 注释
-
-```go
-func (Account) Fields() []ent.Field {
-    return []ent.Field{
-        field.Uint32("id").Comment("primary id"),
-        field.String("user_code").MaxLen(64).Default("").Comment("user code"),
-        field.Uint8("open_status").Default(0).Comment("open status"),
-    }
-}
-
-func (Account) Annotations() []schema.Annotation {
-    return []schema.Annotation{
-        schema.Comment("account table"),
-    }
-}
-```
-
-## 代码示例参考
-
-### 工具能力注释
-
-```go
-// Parallel 实现了一个并发任务池，使用 goroutine 来执行任务，支持控制并发度、异常处理和任务序列号
-type Parallel struct {
-    ...
-}
-```
-
-## Good Example
-
-- `AccountService implements the admin AccountServiceServer interface.`
-- `AccountUseCase 账户聚合根能力`
-- `// ----- Commit flow helpers -----`
-- `schema.Comment("开户页面流程状态表")`
-- `field.String("page_code").Comment("页面编码")`
-
-## 常见坑
-
-- 只有导出名，没有职责注释
-- Ent schema 没有业务语义注释，只剩技术字段名
-- 在 proto 文件中添加任何说明性注释，破坏协议文件整洁性
-- 注释写成大段说明书，掩盖真正的代码结构
-- 每一小段代码都加注释，导致关键点反而不突出
-- 大量写“获取数据”“执行逻辑”这种无效注释
-- 重构后代码变了，注释没同步更新
-
-## 相关 Rule
-
-- `../rules/comment-rule.md`
-
-## 相关 Reference
-
-- `../../kratos-components/reference/ent-spec.md`
-- `../../kratos-entry/reference/proto-spec.md`

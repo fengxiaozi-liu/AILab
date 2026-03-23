@@ -1,132 +1,133 @@
-# Wire Reference
+﻿# Wire Spec
 
-## 这个主题解决什么问题
-说明 provider 集合和 Wire 依赖注入如何组织，以及它与聚合根、`usecase DTO`、proto、service 之间的联动顺序。
+## Provider 组织决策
 
-## 适用场景
+| 层 | ProviderSet 位置 | 包含内容 |
+|----|----------------|---------|
+| data | `internal/data/data.go` | `NewData`, `NewXxxRepo` |
+| biz | `internal/biz/biz.go` | `NewXxxUseCase` |
+| service | `internal/service/service.go` | `NewXxxService` |
 
-- 新增 provider
-- 调整模块依赖
-- 排查 wire 生成失败
+---
 
-## 设计意图
-
-Wire 是注入层收口，不是领域建模或协议设计入口。
-
-- Wire 不负责设计 proto，也不负责定义 `usecase DTO`。
-- Wire 依赖聚合根、应用层 DTO、proto/service 契约和 provider 的稳定结果。
-- 更适合作为最后收口的文件，而不是最先创建的文件。
-
-## 实施提示
-
-- 先找清楚新增依赖属于 data、biz 还是 service/provider 侧。
-- 沿现有 provider set 增量扩展，而不是另起一套注入入口。
-- 如果 `usecase DTO`、proto 或 service 还没稳定，就先不要急着改 wire。
-
-## 推荐结构
-
-- 每层维护自己的 `ProviderSet`
-- 构造函数显式声明依赖
-- 配置对象优先按父配置注入，再在构造函数中读取子字段
-
-## 与 Proto 的联动顺序
-
-更稳定的顺序通常是：
-
-1. 先完成实体识别与聚合根建模
-2. 再平级完成 `usecase DTO` 与 proto/service 契约
-3. 再补 repo / usecase / service 的 provider
-4. 最后更新 `ProviderSet` 和 wire 生成
-
-## 文件创建理解
-
-常见顺序是：
-
-- 先有 domain 文件
-- 再有 `usecase DTO` / proto / service 文件
-- 再有 repo / usecase / service provider
-- 最后才有 wire 入口更新
-
-## 标准模板
+## ProviderSet 模板
 
 ```go
+// ✅ 每层维护自己的 ProviderSet（以 data 层为例）
 var ProviderSet = wire.NewSet(
+    NewData,
     NewAccountRepo,
-    NewAccountUseCase,
-    NewAccountService,
+    NewStoreRepo,
+    NewAdminUserRepo,
 )
-```
 
-## Good Example
+// ✅ 构造函数显式声明所有依赖
+func NewAccountUseCase(
+    repo biz.AccountRepo,
+    tx biz.Tx,
+    eventBus eventbus.EventBus,
+    logger log.Logger,
+) *biz.AccountUseCase {
+    return &biz.AccountUseCase{
+        repo:     repo,
+        tx:       tx,
+        eventBus: eventBus,
+        log:      log.NewHelper(logger),
+    }
+}
 
-```go
-func NewAccountUseCase(repo biz.AccountRepo, tx biz.Tx, logger log.Logger) *biz.AccountUseCase {
-    return &biz.AccountUseCase{repo: repo, tx: tx, log: log.NewHelper(logger)}
+// ❌ 构造函数使用 struct 初始化绕过 wire 依赖声明
+func NewAccountUseCase() *biz.AccountUseCase {
+    return &biz.AccountUseCase{}  // ❌ 依赖未声明，wire 无法注入
 }
 ```
 
-## 代码示例参考
+---
 
-```go
-var ProviderSet = wire.NewSet(
-    data.NewData,
-    data.NewAccountRepo,
-    biz.NewAccountUseCase,
-    service.NewAccountService,
-)
+## 新增 provider 步骤
+
+```text
+// ✅ 增量扩展步骤（不新建注入入口）
+1. 在对应层的构造函数文件中添加 NewXxxRepo / NewXxxUseCase / NewXxxService
+2. 在该层的 ProviderSet 中追加构造函数
+3. 在 cmd/server/wire.go 中引用顶层 ProviderSet
+4. 运行 cd cmd/server && wire 重新生成
+
+// ❌ 为新聚合根单独新建 ProviderSet 文件
+// cmd/server/account_wire.go  ❌
 ```
 
-## 项目通用入口示例
+---
+
+## 配置注入
 
 ```go
-func wireApp(
-    serverConf *conf.Server,
-    dataConf *conf.Data,
-    registryConf *conf.Registry,
-    remoteConf *conf.RemoteConfig,
-    thirdParty *conf.ThirdParty,
-    logger log.Logger,
-) (*kratos.App, func(), error) {
+// ✅ 配置对象按父配置整体注入，构造函数内读取子字段
+func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
+    db, err := openDB(c.Database)  // ✅ 构造函数内读取子字段
+    if err != nil { return nil, nil, err }
+    ...
+}
+
+// ❌ 每个构造函数单独接收细碎配置字段
+func NewData(host string, port int, dbName string) (*Data, func(), error) {  // ❌ 松散配置
+    ...
+}
+```
+
+---
+
+## 联动顺序
+
+```text
+// 正确顺序：领域模型先，Wire 最后
+1. 聚合根建模（biz/account.go）
+2. proto/service 契约（api/.../account.proto）
+3. Repo/UseCase/Service 实现
+4. 更新 ProviderSet
+5. wire 生成（cd cmd/server && wire）
+```
+
+---
+
+## 组合场景
+
+```go
+// 完整：三层 ProviderSet + wire 入口
+// internal/data/data.go
+var ProviderSet = wire.NewSet(NewData, NewAccountRepo)
+
+// internal/biz/biz.go
+var ProviderSet = wire.NewSet(NewAccountUseCase)
+
+// internal/service/service.go
+var ProviderSet = wire.NewSet(NewAccountService)
+
+// cmd/server/wire.go
+func initApp(c *conf.Bootstrap, logger log.Logger) (*kratos.App, func(), error) {
     panic(wire.Build(
-        server.ProviderSet,
         data.ProviderSet,
         biz.ProviderSet,
         service.ProviderSet,
-        listener.ProviderSet,
-        consumer.ProviderSet,
-        crontab.ProviderSet,
+        server.NewHTTPServer,
+        server.NewGRPCServer,
         newApp,
     ))
 }
 ```
 
-## 分层 ProviderSet 示例
+---
+
+## 常见错误模式
 
 ```go
-var ProviderSet = wire.NewSet(
-    NewAccountRepo,
-    NewAccountFlowPageRepo,
-)
+// ❌ 构造函数未声明依赖（wire 无法自动注入）
+func NewAccountUseCase() *biz.AccountUseCase { return &biz.AccountUseCase{} }
 
-var ProviderSet = wire.NewSet(
-    NewAccountUseCase,
-    NewAccountFlowPageUseCase,
-)
+// ❌ 在 proto/service 未稳定时改动 wire
+// 导致 wire 生成后被 proto 变更覆盖，需重复操作
 
-var ProviderSet = wire.NewSet(
-    NewAccountService,
-    NewAccountFlowPageService,
-)
+// ❌ 同一个功能在多个 ProviderSet 重复声明
+var DataProviderSet = wire.NewSet(NewAccountRepo)
+var BizProviderSet  = wire.NewSet(NewAccountRepo, NewAccountUseCase)  // ❌ NewAccountRepo 重复
 ```
-
-## 常见坑
-
-- proto / `usecase DTO` 还没定型就先改 wire
-- provider 分散在多个无关文件里，难以检索
-- 构造函数依赖过多，模块边界不清
-- 注入层先改了，但契约和实现还没收敛
-
-## 相关 Rule
-
-- `../rules/wire-rule.md`
-- `../rules/codegen-rule.md`

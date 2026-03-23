@@ -1,79 +1,110 @@
-# Codegen Reference
+﻿# Codegen Spec
 
-## 这个主题解决什么问题
+## 生成链路决策
 
-说明 Kratos 项目里 proto、wire、ent 等生成链路通常如何执行，以及常见的本地开发流程。
+| 改动类型 | 执行命令 | 检查产物 |
+|---------|---------|---------|
+| 修改 `.proto` 文件 | `make generate` | `api/.../v1/*.pb.go` |
+| 修改 `ent/schema/*.go` | `ent generate ./ent/schema` | `ent/*.go` |
+| 修改 wire ProviderSet / 构造函数 | `cd cmd/server && wire` | `cmd/server/wire_gen.go` |
+| 以上任意变动后 | `go build ./...` | 编译无错误 |
 
-## 适用场景
+---
 
-- 修改 proto、wire provider、ent schema
-- 排查生成物与源码不一致
-- 补齐本地生成与构建验证步骤
-
-## 设计意图
-
-Codegen 参考的作用是帮助把“改源文件”和“同步生成链路”视为同一个实现动作，而不是两个割裂步骤。
-
-- proto、wire、ent 都属于源定义驱动的生成体系，理解这点后更容易主动补生成和校验。
-- 生成链路清楚时，可以更快判断问题出在源文件、工具版本还是产物漂移。
-- 本地流程稳定后，评审和 CI 看到的差异也会更可预测。
-
-## 实施提示
-
-- 先确认改动触发的是哪条生成链路。
-- 再执行对应命令，并检查差异是否与预期一致。
-- 如果生成结果超出预期范围，优先回看源定义而不是直接修补产物。
-
-## 典型生成对象
-
-- Proto：API 契约、DTO、validate 代码
-- Wire：依赖注入装配代码
-- Ent：ORM schema 生成代码
-
-## 推荐执行方式
-
-### Wire
+## proto 生成
 
 ```bash
+# ✅ 修改 .proto 后执行
+make generate
+
+# ✅ 验证生成产物无误
+go build ./...
+
+# ❌ 手动修改 .pb.go 文件（会被下次生成覆盖）
+# vim api/admin/account/v1/account.pb.go  ❌
+```
+
+---
+
+## ent 生成
+
+```bash
+# ✅ 修改 ent/schema/*.go 后执行
+ent generate ./ent/schema
+
+# ✅ 也可通过 make 封装
+make ent-generate
+
+# ❌ 直接修改 ent/ 下的生成文件
+# vim ent/account.go  ❌
+```
+
+---
+
+## wire 生成
+
+```bash
+# ✅ 修改 ProviderSet 或构造函数后执行
 cd cmd/server
 wire
+
+# ✅ wire 生成后校验编译
+go build ./cmd/server/...
+
+# ❌ 手动修改 wire_gen.go
+# vim cmd/server/wire_gen.go  ❌
 ```
 
-### Proto
+---
+
+## ⚠️ 工具版本对齐
 
 ```bash
-make generate
+# ⚠️ 确认本地工具版本与 CI 一致，否则产物可能有格式差异
+protoc --version
+wire --version
+ent version
+
+# ⚠️ 生成产物需提交到仓库（CI 不重新生成），保证产物与源定义一致
+git diff --stat  # 检查是否有未提交的生成文件
 ```
 
-### 常见本地流程
+---
 
-```text
-修改源文件
--> 运行对应生成命令
--> 检查差异
--> 执行最小 build 验证
-```
-
-## 代码示例参考
+## 组合场景
 
 ```bash
-# proto 变更后
+# 完整：新增 Account 聚合根后的生成流程
+# 1. 新增 ent schema
+echo "新增 ent/schema/account.go"
+ent generate ./ent/schema
+
+# 2. 新增 proto 定义
+echo "新增 api/admin/account/v1/account.proto"
 make generate
 
-# wire 变更后
+# 3. 新增 wire provider
+echo "更新 ProviderSet"
 cd cmd/server && wire
 
-# 最小验证
-go build ./...
+# 4. 全量校验
+cd ../.. && go build ./...
 ```
 
-## 常见坑
+---
 
-- 本地工具版本与 CI 不一致
-- 修改了 proto 或 schema，但漏跑生成命令
-- 生成结果漂移后难以判断问题是工具还是源文件
+## 常见错误模式
 
-## 相关 Rule
+```bash
+# ❌ 修改 proto 后忘记执行 make generate
+# 导致 .pb.go 与 .proto 不一致，运行时 panic
 
-- `../rules/codegen-rule.md`
-- `../rules/wire-rule.md`
+# ❌ 修改 wire ProviderSet 后忘记 wire 生成
+# 报错：wire: no provider found for ...
+
+# ❌ 手动修改生成文件
+# 下次 make generate 覆盖手动改动
+
+# ❌ 本地工具版本低于 CI
+# 生成的 .pb.go 格式不同，PR 产生噪音 diff
+```

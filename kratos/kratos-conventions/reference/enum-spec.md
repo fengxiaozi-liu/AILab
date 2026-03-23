@@ -1,63 +1,9 @@
-# Enum Reference
+﻿# Enum Spec
 
-## 这个主题解决什么问题
-
-说明业务状态、类型和值域如何使用枚举表达，以及枚举在 proto、Biz、DB 之间如何对齐。
-
-## 适用场景
-
-- 新增业务状态
-- 调整状态机分支
-- 统一不同层的状态表达
-
-## 设计意图
-
-Enum 参考的重点是解释状态和值域如何表达业务阶段，而不是只列一组常量。
-
-- 枚举值会直接影响分支、序列化、筛选和展示文案。
-- 先理解状态从何而来、会流向哪里，再补常量和 switch，更不容易漏分支。
-- 枚举命名稳定后，错误语义、i18n 和协议字段也更容易统一。
-
-## 实施提示
-
-- 先画出状态集合和流转方向，再决定常量命名。
-- 同步检查数据库字段、proto 枚举和业务分支是否共用同一套值域。
-- 如果一个状态只在临时流程里出现，先确认它是否应成为长期枚举。
-
-## 推荐结构
-
-- proto、Biz、数据库映射使用同一语义名
-- 状态流转优先围绕枚举展开
-
-## 典型写法
+## 枚举定义
 
 ```go
-switch account.OpenStatus {
-case openenum.AccountOpenStatusInit:
-    ...
-case openenum.AccountOpenStatusFilling:
-    ...
-default:
-    ...
-}
-```
-
-```go
-func (u *AccountUseCase) canReview(status openenum.AccountStatus) bool {
-    switch status {
-    case openenum.AccountStatusPending, openenum.AccountStatusChecking:
-        return true
-    case openenum.AccountStatusRejected, openenum.AccountStatusApproved:
-        return false
-    default:
-        return false
-    }
-}
-```
-
-## 项目通用枚举定义示例
-
-```go
+// ✅ typed 枚举，值从 1 开始（0 保留为零值/无效）
 type AccountOpenStatus uint32
 
 const (
@@ -68,15 +14,58 @@ const (
     AccountOpenStatusOpened
 )
 
+// ❌ 裸数字，switch 分支无法检测遗漏
+const (
+    StatusInit     = 1
+    StatusFilling  = 2
+)
+
+// ❌ 裸字符串替代枚举
+if account.Status == "pending" { ... }
+```
+
+---
+
+## switch 完整性
+
+```go
+// ✅ 包含 default，能捕获未处理值
+func (u *AccountUseCase) canReview(status openenum.AccountStatus) bool {
+    switch status {
+    case openenum.AccountStatusPending, openenum.AccountStatusChecking:
+        return true
+    case openenum.AccountStatusRejected, openenum.AccountStatusApproved:
+        return false
+    default:
+        return false  // ✅ 明确返回，不静默忽略
+    }
+}
+
+// ❌ 只处理部分已知状态，漏掉新增枚举值
+switch status {
+case openenum.AccountStatusPending:
+    return true
+case openenum.AccountStatusApproved:
+    return false
+}
+// 没有 default：新增枚举值后静默返回零值
+```
+
+---
+
+## 枚举与 Localize
+
+```go
+// ✅ 枚举自带 Localize 方法，展示文案统一来自枚举
 func (s AccountOpenStatus) Localize(localizer *i18n.Localizer) string {
     switch s {
     case AccountOpenStatusInit:
         return localize.LocalizeOrUseOther(localizer, &i18n.LocalizeConfig{
-            DefaultMessage: &i18n.Message{ID: "ENUM_OPEN_STATUS_INIT", Other: "初始化状态"},
+            DefaultMessage: &i18n.Message{ID: "ENUM_OPEN_STATUS_INIT", Other: "初始化"},
         })
     case AccountOpenStatusFilling:
         return localize.LocalizeOrUseOther(localizer, &i18n.LocalizeConfig{
-            DefaultMessage: &i18n.Message{ID: "ENUM_OPEN_STATUS_FILLING", Other: "信息填充中"},
+            DefaultMessage: &i18n.Message{ID: "ENUM_OPEN_STATUS_FILLING", Other: "填写中"},
         })
     default:
         return ""
@@ -84,9 +73,12 @@ func (s AccountOpenStatus) Localize(localizer *i18n.Localizer) string {
 }
 ```
 
-## 状态流转示例
+---
+
+## 状态流转
 
 ```go
+// ✅ 状态流转基于枚举，错误语义明确
 switch account.OpenStatus {
 case openenum.AccountOpenStatusFirstChecking:
     account.OpenStatus = openenum.AccountOpenStatusSecondChecking
@@ -95,14 +87,37 @@ case openenum.AccountOpenStatusSecondChecking:
 default:
     return openerror.ErrorReviewStatusInvalid(ctx)
 }
+
+// ❌ 用数字做状态流转，意义不明
+if account.Status == 3 {
+    account.Status = 4
+}
 ```
 
-## 常见坑
+---
 
-- 状态语义写成裸数字或裸字符串
-- proto 和 Biz 中的枚举名称不一致
-- 状态新增后漏改 switch 分支
+## 枚举变更联动
 
-## 相关 Rule
+| 变更类型 | 必须同步检查 |
+|----------|-------------|
+| 新增枚举值 | proto 枚举定义、DB 列允许值、所有 switch default 覆盖 |
+| 重命名枚举值 | proto、DB 中已存储的值、所有引用点 |
+| 删除枚举值 | DB 历史数据处理方案、协议兼容性 |
 
-- `../rules/enum-rule.md`
+---
+
+## 常见错误模式
+
+```go
+// ❌ proto 枚举值和 Go 常量不一致（proto 用 0 开始，Go 用 1+iota）
+// 导致序列化后值错位
+
+// ❌ switch 无 default，新增枚举值后静默忽略
+switch status {
+case openenum.AccountStatusPending: ...
+case openenum.AccountStatusApproved: ...
+}
+
+// ❌ 用裸字符串
+if account.Type == "personal" { ... }
+```

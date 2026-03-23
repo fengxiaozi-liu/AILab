@@ -1,126 +1,127 @@
-# Gateway Reference
+﻿# Gateway Spec
 
-## 这个主题解决什么问题
+## Gateway 职责范围
 
-说明 Gateway/Openapi 场景下如何做代理转发、参数映射和响应适配。
+| 允许在 Gateway 层做 | 禁止在 Gateway 层做 |
+|--------------------|---------------------|
+| HTTP 路径参数提取 | 查询 DB / 调用 Repo |
+| 协议转换（HTTP → gRPC req） | 承接业务流程（状态流转）|
+| 调用上游 gRPC client | 聚合多个上游并做业务决策 |
+| 响应适配（gRPC reply → HTTP resp） | 发布 EventBus |
 
-## 适用场景
+---
 
-- 新增或修改 Gateway 路由
-- 设计代理请求和响应映射
-- 处理协议适配
-
-## 设计意图
-
-Gateway 参考解释的是代理层如何负责协议转换和转发，而不是承接完整业务流程。
-
-- Gateway 面向外部入口、路由整形和参数映射，它与业务核心的变化节奏不同。
-- 理解这一点后，更容易把网关实现写成清晰代理层，而不是第二套业务服务。
-- 代理层结构稳定时，排查外部请求问题会更直接。
-
-## 实施提示
-
-- 先说明请求从哪里来、要转发到哪里、参数如何映射。
-- 再决定是直接代理、聚合多个下游，还是只做协议转换。
-- 如果 gateway 方法开始维护业务状态，通常意味着已经越过代理边界。
-
-## 推荐结构
-
-- Gateway 只做代理与适配
-- 参数映射、鉴权信息、错误转换在接入层完成
-
-## 典型实现方式
-
-```text
-HTTP Request
--> 参数转换
--> 调用上游服务
--> 响应适配
--> 对外返回
-```
-
-## 标准模板
+## 标准代理模式
 
 ```go
-func (s *GatewayService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
-    resp, err := s.accountClient.GetAccount(ctx, convert(req))
-    if err != nil {
-        return nil, err
-    }
-    return convertReply(resp), nil
-}
-```
-
-## 代码示例参考
-
-```go
+// ✅ Gateway 只做参数提取 + 代理调用 + 响应适配
 func (s *GatewayService) GetAccount(ctx http.Context) error {
-    req := &v1.GetAccountRequest{Id: cast.ToUint32(ctx.Param("id"))}
+    req := &v1.GetAccountRequest{
+        Id: cast.ToUint32(ctx.Vars("id")),
+    }
     reply, err := s.accountClient.GetAccount(ctx, req)
-    if err != nil {
-        return err
+    if err != nil { return err }
+    return ctx.Result(200, reply)  // ✅ 透传 reply，不重组
+}
+
+// ❌ Gateway 内做业务判断
+func (s *GatewayService) GetAccount(ctx http.Context) error {
+    req := &v1.GetAccountRequest{Id: cast.ToUint32(ctx.Vars("id"))}
+    reply, err := s.accountClient.GetAccount(ctx, req)
+    if err != nil { return err }
+    if reply.Info.Status != "opened" {  // ❌ 业务判断不在 Gateway
+        return errors.New(400, "NOT_OPEN", "未开户")
     }
     return ctx.Result(200, reply)
 }
 ```
 
-## 项目通用 HTTP 注册示例
+---
+
+## 跨协议参数映射
 
 ```go
-func NewHTTPServer(
-    accountService *openservice.AccountService,
-    accountAdminService *adminservice.AccountService,
-    c *conf.Server,
-) *http.Server {
-    srv := http.NewServer(...)
+// ✅ 入参从 HTTP path/query/body 构造 gRPC req
+func (s *GatewayService) PageListAccount(ctx http.Context) error {
+    var req v1.PageListAccountRequest
+    if err := ctx.BindQuery(&req); err != nil { return err }
+    req.TenantId = cast.ToUint32(ctx.Header("X-Tenant-ID"))
 
-    openv1.RegisterAccountServiceHTTPServer(srv, accountService)
-    adminv1.RegisterAccountServiceHTTPServer(srv, accountAdminService)
+    reply, err := s.accountClient.PageListAccount(ctx, &req)
+    if err != nil { return err }
+    return ctx.Result(200, reply)
+}
 
-    return srv
+// ❌ Gateway 内自行拼分页逻辑
+func (s *GatewayService) PageListAccount(ctx http.Context) error {
+    page := cast.ToInt(ctx.Query("page"))
+    pageSize := cast.ToInt(ctx.Query("page_size"))
+    offset := (page - 1) * pageSize  // ❌ 分页计算应在 proto helper 或上游处理
+    ...
 }
 ```
 
-## 内部 Gateway 协议示例
+---
 
-```proto
-service AuthService {
-  rpc CreateAuth (Auth) returns (CreateAuthReply) {};
-  rpc ParseAuth (ParseAuthRequest) returns (Auth) {};
-  rpc RefreshAuth (RefreshAuthRequest) returns (RefreshAuthReply) {};
-}
-
-message Auth {
-  string subject = 1;
-  string audience = 2;
-  string viewer_id = 3;
-  bool sso_mod = 4;
-  map<string, string> extra = 5;
-}
-```
-
-## 参数透传示例
+## Gateway 构造函数
 
 ```go
-func (r *authRepo) ParseAuth(ctx context.Context, token string, subject string) (*gatewaybiz.Auth, error) {
-    reply, err := r.authClient.ParseAuth(ctx, &gatewayv1.ParseAuthRequest{
-        Token:   token,
-        Subject: subject,
-    })
-    if err != nil {
-        return nil, err
-    }
-    return authConvert(reply), nil
+// ✅ 只注入上游 gRPC client
+func NewGatewayService(accountClient v1.AccountClient) *GatewayService {
+    return &GatewayService{accountClient: accountClient}
+}
+
+// ❌ Gateway 注入 Repo 或 UseCase
+func NewGatewayService(accountClient v1.AccountClient, repo biz.AccountRepo) *GatewayService {
+    return &GatewayService{accountClient: accountClient, repo: repo}  // ❌
 }
 ```
 
-## 常见坑
+---
 
-- 请求和响应转换散落在多个文件
-- 同一代理逻辑的鉴权、路由、转换不在一个闭环里
-- Gateway 直接开始补业务字段
+## 组合场景
 
-## 相关 Rule
+```go
+// 完整：HTTP 请求 → Gateway 代理 → gRPC 上游 → HTTP 响应
+func (s *GatewayService) RegisterRoutes(r *http.Router) {
+    r.GET("/api/v1/accounts/{id}", s.GetAccount)
+    r.POST("/api/v1/accounts/list", s.PageListAccount)
+}
 
-- `../rules/gateway-rule.md`
-- `../rules/entry-security-rule.md`
+func (s *GatewayService) GetAccount(ctx http.Context) error {
+    req := &v1.GetAccountRequest{Id: cast.ToUint32(ctx.Vars("id"))}
+    reply, err := s.accountClient.GetAccount(ctx, req)  // ✅ 代理调用
+    if err != nil { return err }
+    return ctx.Result(200, reply)  // ✅ 透传响应
+}
+
+func (s *GatewayService) PageListAccount(ctx http.Context) error {
+    var req v1.PageListAccountRequest
+    if err := ctx.Bind(&req); err != nil { return err }
+    reply, err := s.accountClient.PageListAccount(ctx, &req)
+    if err != nil { return err }
+    return ctx.Result(200, reply)
+}
+```
+
+---
+
+## 常见错误模式
+
+```go
+// ❌ Gateway 实现完整业务流程
+func (s *GatewayService) OpenAccount(ctx http.Context) error {
+    // 查数据库检查是否已开户 ❌
+    account, _ := s.accountRepo.GetAccount(ctx, id)
+    if account != nil { return errors.New(400, "EXISTS", "已开户") }
+    _, err := s.accountClient.CreateAccount(ctx, &v1.CreateAccountRequest{...})
+    return err
+}
+
+// ❌ Gateway 聚合多个上游并做决策
+func (s *GatewayService) GetAccountDetail(ctx http.Context) error {
+    account, _ := s.accountClient.GetAccount(ctx, req)
+    store, _ := s.storeClient.GetStore(ctx, req)
+    if account.Status == store.Status { ... }  // ❌ 跨服务业务决策
+}
+```

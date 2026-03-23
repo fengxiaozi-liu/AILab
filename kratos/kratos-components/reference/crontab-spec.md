@@ -1,78 +1,76 @@
-# Crontab Reference
+﻿# Crontab Spec
 
-## 这个主题解决什么问题
-
-说明 Kratos 定时任务如何组织注册、执行函数和运行时状态，以及如何设计可维护的调度任务。
-
-## 适用场景
-
-- 新增定时任务
-- 重构现有任务
-- 设计补偿任务或巡检任务
-
-## 设计意图
-
-Crontab 参考主要解释调度入口和任务执行逻辑为什么要分开，以及定时任务为什么更适合设计成可重复运行的业务入口。
-
-- 调度注册是运行时入口，任务执行是业务行为，两者分开后更容易复用和观测。
-- 定时任务经常伴随补偿、批处理和重跑，需要比普通接口更容易看出执行范围与状态来源。
-- 先理解任务目标和执行粒度，就不容易把任务写成无边界的大扫描脚本。
-
-## 实施提示
-
-- 先说明任务是巡检、补偿、同步还是定时聚合。
-- 再把注册入口、执行函数、状态读取和结果写回拆开组织。
-- 如果一次运行会处理大量对象，优先先设计批次、游标或范围切分方式。
-
-## 推荐结构
-
-- 任务对象负责注册和调度入口
-- 运行时状态、快照、缓存等下沉到 Repo 或持久层
-
-## 标准模板
+## 注册与执行分离
 
 ```go
+// ✅ 注册与执行分离，Run 函数只做调度编排
 type SyncAccountJob struct {
     repo biz.AccountRepo
+    log  *log.Helper
 }
 
-func (j *SyncAccountJob) register(cron *crontab.Crontab) error {
-    return cron.Register("sync_account", "0 */5 * * * *", j.Run)
+func (c *Crontab) register() error {
+    return c.cron.Register("sync_account", "0 */5 * * * *", c.syncJob.Run)
 }
-```
 
-```go
 func (j *SyncAccountJob) Run(ctx context.Context) error {
-    list, err := j.repo.ListNeedSyncAccount(ctx, &biz.AccountFilter{Status: openenum.AccountStatusPending})
+    list, err := j.repo.ListNeedSyncAccount(ctx, &biz.AccountFilter{
+        Status: openenum.AccountStatusPending,
+    })
     if err != nil {
         return err
     }
     for _, item := range list {
         if err := j.repo.MarkSyncing(ctx, item.ID); err != nil {
-            return err
+            j.log.WithContext(ctx).Errorf("mark syncing failed: account=%d err=%v", item.ID, err)
+            continue
         }
     }
     return nil
 }
+
+// ❌ 注册和执行混写，任务函数直接包含大量状态操作
+func NewCrontab(...) {
+    cron.Register("sync", "0 */5 * * * *", func(ctx context.Context) error {
+        rows, _ := db.Query("SELECT * FROM account WHERE status=1")
+        for rows.Next() { /* 直接写库 */ }
+        return nil
+    })
+}
 ```
 
-## Good Example
+---
 
-- Run 函数只负责调度与编排
-- 业务状态变更和查询委托给 Repo
+## 幂等设计
 
-## 项目通用注册入口示例
+| 任务类型 | 幂等要求 |
+|----------|---------|
+| 补偿/重跑任务 | MUST 幂等：重复执行不破坏数据 |
+| 巡检/统计任务 | SHOULD 幂等或只做读操作 |
+| 周期性写入 | MUST 在上线前确认幂等保证（如使用唯一索引或状态机控制） |
 
 ```go
-var ProviderSet = wire.NewSet(
-    NewCrontab,
-)
+// ✅ 幂等写：Upsert 保证重复执行安全
+err = r.data.Db.AccountSnapshot(ctx).Create().
+    SetAccountID(accountID).
+    SetSnapshotData(data).
+    OnConflict().
+    UpdateSnapshotData().
+    Exec(ctx)
 
-type Crontab struct {
-    cron *crontab.Crontab
-    cfg  *conf.Data_Crontab
-}
+// ❌ 无幂等保证的直接 INSERT
+_, err = r.data.Db.AccountSnapshot(ctx).Create().
+    SetAccountID(accountID).
+    SetSnapshotData(data).
+    Save(ctx)
+```
 
+---
+
+## Crontab 初始化
+
+```go
+// ✅ 标准 Crontab 初始化
 func NewCrontab(redis *redis.Redis, conf *conf.Data, logger log.Logger) (*Crontab, error) {
     cron, err := crontab.NewCrontab(redis, constant.NewConfig(
         constant.WithSecondLevel(true),
@@ -82,7 +80,6 @@ func NewCrontab(redis *redis.Redis, conf *conf.Data, logger log.Logger) (*Cronta
     if err != nil {
         return nil, err
     }
-
     c := &Crontab{cron: cron, cfg: conf.Crontab}
     if err := c.register(); err != nil {
         return nil, err
@@ -91,30 +88,54 @@ func NewCrontab(redis *redis.Redis, conf *conf.Data, logger log.Logger) (*Cronta
 }
 ```
 
-## 生命周期示例
+---
+
+## 组合场景
 
 ```go
-func (c *Crontab) Start() error {
-    if strings.EqualFold(c.cfg.Enable, "true") {
-        c.cron.Start()
-    }
-    return nil
+// 完整任务：注册 + 幂等补偿 + 明确并发策略（分布式锁由 crontab 框架保证）
+func (c *Crontab) register() error {
+    return c.cron.Register("compensate_account", "0 */10 * * * *", c.compensateJob.Run)
 }
 
-func (c *Crontab) Stop() error {
-    if strings.EqualFold(c.cfg.Enable, "true") {
-        return c.cron.Stop()
+func (j *CompensateAccountJob) Run(ctx context.Context) error {
+    // 明确范围：只处理 pending 超过 10 分钟的记录
+    deadline := uint32(time.Now().Add(-10 * time.Minute).Unix())
+    list, err := j.repo.ListStaleAccount(ctx, &biz.AccountFilter{
+        Status:         openenum.AccountStatusPending,
+        CreateTimeLte:  deadline,
+    })
+    if err != nil {
+        return err
+    }
+    for _, item := range list {
+        // ✅ 幂等：先检查状态，再执行
+        if err := j.uc.TryCompensate(ctx, item.ID); err != nil {
+            j.log.WithContext(ctx).Errorf("compensate failed: account=%d err=%v", item.ID, err)
+        }
     }
     return nil
 }
 ```
 
-## 常见坑
+---
 
-- 任务内部持有大量可变状态
-- 定时任务直接做复杂数据扫描和写入而无清晰边界
-- 多个任务共用一套模糊的日志和观测字段
+## 常见错误模式
 
-## 相关 Rule
+```go
+// ❌ 无幂等保证的周期写
+func (j *Job) Run(ctx context.Context) error {
+    _, err = db.Exec("INSERT INTO snapshots (...) VALUES (...)")
+    return err
+}
 
-- `../rules/crontab-rule.md`
+// ❌ 任务内可变状态（第二次运行使用了上次的缓存结果）
+type Job struct { lastResult []*Account }
+
+// ❌ 缺少超时和失败处理，长时间阻塞
+func (j *Job) Run(ctx context.Context) error {
+    for _, id := range ids {
+        doSlowRemoteCall(id) // 无超时
+    }
+}
+```

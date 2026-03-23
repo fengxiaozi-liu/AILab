@@ -1,67 +1,83 @@
 ---
 name: kratos-pkg
-description: |
-  用于 Kratos 项目 internal/pkg 通用基础能力的设计与实现，包括 context、metadata、middleware、proto helper、schema、seata、util 的边界、复用与实现规范。适用于新增或修改 internal/pkg 下的公共能力、上下文透传、metadata 注入与提取、中间件接入、proto 与 filter 转换、schema 提取、分布式事务封装或稳定工具沉淀的场景。触发关键词包括 internal/pkg、context、metadata、middleware、trans field、time range、paging、sort、filter、schema、seata、util。
+description: 用于 Kratos 项目 internal/pkg 通用基础能力的设计与实现，包括 context、metadata、middleware、proto helper、schema、seata、util 的边界、复用与实现规范。
+  适用于新增或修改 internal/pkg 下公共能力、上下文透传、metadata 注入提取、中间件接入、proto 与 filter 转换、schema 提取、分布式事务封装或稳定工具沉淀的场景。
+  触发关键词：internal/pkg、context、metadata、middleware、trans field、time range、paging、sort、filter、schema、seata、util。
+  DO NOT USE FOR：业务逻辑编排（→ kratos-domain）、基础设施组件（→ kratos-components）、接入层协议（→ kratos-entry）。
 ---
 
 # Kratos Pkg
 
-## 必读规则
+## 输入
 
-- `./rules/pkg-boundary-rule.md`
-- `./rules/context-rule.md`
-- `./rules/metadata-rule.md`
-- `./rules/middleware-rule.md`
-- `./rules/proto-helper-rule.md`
+- 必需：变更目标描述（pkg 子域 / 能力描述）
+- 必需：说明为什么该能力属于 `internal/pkg`（脱离业务后是否仍有复用价值）
+- 可选：涉及的文件路径或现有近义实现
 
-## 按需参考
+缺少必需输入时，MUST 先向用户提问，不得猜测继续。
 
-- Context：`./reference/context-spec.md`
-- Metadata：`./reference/metadata-spec.md`
-- Middleware：`./reference/middleware-spec.md`
-- Proto Helper：`./reference/proto-helper-spec.md`
-- Schema：`./reference/schema-spec.md`
-- Seata：`./reference/seata-spec.md`
-- Util：`./reference/util-spec.md`
+## 工作流
 
-## 读取顺序
+1. 判断需求是否真正属于 `internal/pkg` 公共基础能力
+2. 输出开始前结构化状态（见强制输出）
+3. 识别本次变更子域：`context` / `metadata` / `middleware` / `proto` / `schema` / `seata` / `util`
+4. 按需加载对应参考文件（见参考文件清单）
+5. IF 能力被多层调用 → 评估 context / metadata / middleware / proto helper 之间的联动
+6. 执行变更
+7. 回看是否引入了近义重复结构、业务泄漏或过度封装
+8. 输出完成后结构化状态（见强制输出）
 
-先读取 `./rules/*.md` 明确 `internal/pkg` 的边界和禁止项，再按当前任务读取对应 `./reference/*.md` 获取推荐实现方式、模板与示例。
+## 约束
 
-## 何时使用
+### MUST
+- `internal/pkg` MUST 只承载跨层、稳定、可复用的基础能力，能力脱离具体业务服务后仍然成立
+- `context` MUST 通过统一的 typed helper（`WithTenant`、`WithLocalize`、`WithViewer` 等）读写，不使用裸字符串 key
+- 新增 context 字段时 MUST 同步评估是否需要联动 `metadata` 与 `middleware`
+- `proto helper` MUST 只负责稳定的协议辅助转换，不负责业务 reply 拼装或聚合装配
+- 同一能力被多个模块复用且边界明确、接口稳定时，MUST 才沉淀到 `internal/pkg`
 
-- 新增或修改 `internal/pkg/context`、`internal/pkg/metadata`
-- 新增或调整通用中间件、Context 注入、错误格式化、租户或用户透传
-- 新增或修改 `internal/pkg/proto` 下的 `TransField`、`Paging`、`Sort`、`TimeRange`、`FilterConfig` 转换
-- 新增或调整 `schema`、`seata`、`util` 等基础能力
-- 判断某个通用能力应放入 `internal/pkg` 还是业务层时
+### MUST NOT
+- MUST NOT 把聚合对象、业务状态流转、业务校验、业务规则判断放入 `internal/pkg`
+- MUST NOT 仅为单个调用点创建 `util`、`helper`、`common` 壳目录或壳函数
+- MUST NOT 在 `internal/pkg` 中拼装业务 reply、聚合关系或下沉 repo/usecase 逻辑
+- MUST NOT 在业务代码中直接使用裸字符串 key 读写 context
+- MUST NOT 把大对象、聚合关系、临时业务结果直接塞进 context
+- MUST NOT 同一语义同时由 context struct、metadata key、middleware 重复维护而不做收口
 
-## 核心约束
-
-1. `internal/pkg` 只承载跨层、稳定、可复用的基础能力，不承载业务聚合、业务流程和具体领域规则。
-2. `context`、`metadata`、`middleware` 必须协同设计，避免同一语义被重复存放在多个入口。
-3. `proto helper` 负责稳定的协议辅助转换，不负责业务 `reply` 拼装或聚合装配。
-4. `util` 只沉淀真正跨模块复用的无状态工具，避免把零散业务逻辑塞进工具包。
-5. `schema`、`seata` 等基础封装要保持通用性，调用方通过显式参数和配置接入。
-
-## 实施流程
-
-1. 先判断需求是否真的属于 `internal/pkg` 公共基础能力。
-2. 选择对应主题的 rule，确认边界、命名和禁止项。
-3. 读取对应 reference，复用已有模式补充实现。
-4. 若能力会被多层调用，评估 `context`、`metadata`、`middleware`、`proto helper` 之间的联动。
-5. 回看是否引入了近义重复结构、业务泄漏或过度封装。
+### SHOULD
+- `util` SHOULD 只沉淀真正跨模块复用的无状态工具
+- `internal/pkg` 中的类型、函数和目录命名 SHOULD 围绕基础能力本身，不围绕具体业务动作
 
 ## 强制输出
 
 开始前输出：
 
-- `PkgScope:` 本次涉及的 pkg 子域，例如 `context / metadata / middleware / proto / seata / util`
-- `FoundationChange:` 本次新增或调整的基础能力摘要
-- `BoundaryCheck:` 为什么这部分应该放在 `internal/pkg`
+```json
+{
+  "pkgScope": "context | metadata | middleware | proto | schema | seata | util",
+  "foundationChange": "本次新增或调整的基础能力摘要",
+  "boundaryCheck": "为什么这部分应该放在 internal/pkg"
+}
+```
 
-提交前输出：
+完成后输出：
 
-- 是否避免了业务逻辑泄漏到 `internal/pkg`（Yes/No）
-- 是否复用了现有 `context / metadata / filter / proto helper` 能力而不是重复造轮子（Yes/No）
-- 是否保持了 middleware、metadata、context 的一致性（Yes/No）
+```json
+{
+  "noBusinessLeakage": true,
+  "noRedundantImplementation": true,
+  "contextMetadataMiddlewareConsistent": true
+}
+```
+
+## 参考文件
+
+| 文件 | 适用场景 | 加载时机 |
+|------|----------|----------|
+| `reference/context-spec.md` | 新增或修改上下文透传、viewer、租户注入 | 涉及 context 变更时 |
+| `reference/metadata-spec.md` | 新增或修改 metadata 注入与提取 | 涉及 metadata 变更时 |
+| `reference/middleware-spec.md` | 新增或调整通用中间件 | 涉及 middleware 变更时 |
+| `reference/proto-helper-spec.md` | 新增或修改 TransField、Paging、Sort、TimeRange、FilterConfig 转换 | 涉及 proto helper 变更时 |
+| `reference/schema-spec.md` | 新增或调整 schema 提取 | 涉及 schema 时 |
+| `reference/seata-spec.md` | 新增或调整分布式事务封装 | 涉及 seata 时 |
+| `reference/util-spec.md` | 新增稳定工具沉淀 | 涉及 util 时 |

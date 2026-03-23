@@ -1,69 +1,128 @@
-# Layer Reference
+﻿# Layer Spec
 
-## 这个主题解决什么问题
+## 各层职责决策
 
-说明 Kratos 项目中 biz、data、service、server 四层通常分别承担什么工作，以及常见调用路径如何组织。
-
-## 适用场景
-
-- 新增模块或移动代码文件
-- 判断逻辑应放在 UseCase、Repo 还是 Service
-- 分析跨层依赖和代码落位
-
-## 设计意图
-
-分层参考不是为了目录整齐，而是让协议变化、业务变化和数据变化分开演进。
-
-- `service/server` 更接近接入和协议，`biz/data` 更接近领域与持久化。
-- 先理解每层“为什么存在”，后续落代码时更容易把逻辑放到稳定位置。
-- 层边界清楚后，改接口时不会顺手把业务逻辑带进接入层，改 Repo 时也不会反向污染 UseCase。
-
-## 实施提示
-
-- 先判断当前改动属于协议适配、业务编排还是数据装配。
-- 再决定代码应该落在 `service/server`、`biz` 还是 `data`。
-- 如果一个函数同时依赖协议细节和数据装配细节，通常值得重新拆层。
-
-## 推荐结构
-
-- `service/`：协议适配、参数转换、显式入参准备
-- `biz/`：业务编排、事务、权限、状态流转
-- `data/`：DB、缓存、远程依赖、relation 装配
-- `server/`：注册 gRPC/HTTP 服务与中间件
-
-## 典型实现方式
-
-```text
-Request -> Service -> UseCase -> Repo -> DB/Depend
-                              -> EventBus/Tx
-```
-
-## 标准模板
+| 逻辑类型 | 落在哪层 |
+|---------|---------|
+| 协议字段转换、显式入参构造 | Service |
+| 业务编排、权限、状态流转、事务边界 | UseCase |
+| 查询过滤、relation 装配、数据访问 | Repo/Data |
+| gRPC/HTTP 注册、中间件配置 | Server |
 
 ```go
-func (s *AccountService) Get(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
-    info, err := s.uc.GetAccount(ctx, req.Id)
-    if err != nil {
-        return nil, err
+// ✅ Service 只做参数转换，不做业务判断
+func (s *AccountService) GetOpenStatus(ctx context.Context, req *v1.GetOpenStatusRequest) (*v1.GetOpenStatusReply, error) {
+    userCode := strconv.FormatUint(uint64(metadata.GetViewerID(ctx)), 10)
+    status, err := s.uc.GetOpenStatus(ctx, userCode)
+    if err != nil { return nil, err }
+    return &v1.GetOpenStatusReply{OpenStatus: uint32(status)}, nil
+}
+
+// ❌ Service 中实现业务判断
+func (s *AccountService) GetOpenStatus(ctx context.Context, req *v1.GetOpenStatusRequest) (*v1.GetOpenStatusReply, error) {
+    account, err := s.uc.GetAccount(ctx, req.Id)
+    if account.Status != openenum.AccountStatusOpened {  // ❌ 业务判断不应在 Service
+        return nil, errors.New(400, "NOT_OPEN", "未开户")
     }
-    return convertToReply(info), nil
+    return &v1.GetOpenStatusReply{}, nil
 }
 ```
 
-## Good Example
+---
 
-- Service 只做请求解析与响应转换
-- UseCase 负责决定是否需要事务和 relation
-- Repo 负责查询、装配和依赖调用
+## 禁止越层调用
 
-## 常见坑
+```go
+// ❌ Service 直接调用 Repo（越层）
+type AccountService struct {
+    repo biz.AccountRepo  // ❌ Service 不应持有 Repo
+}
 
-- 在 Service 中直接补查 relation
-- 在 Repo 中处理状态流转
-- 在 UseCase 中拼接协议层 DTO
+// ❌ UseCase 直接写 DB
+func (u *AccountUseCase) GetAccount(ctx context.Context, id uint32) (*Account, error) {
+    return u.data.Db.Account(ctx).Query().Where(...).First(ctx)  // ❌ UseCase 不直接访问 DB
+}
 
-## 相关 Rule
+// ✅ 标准调用链
+// Request → Service → UseCase → Repo → DB/Depend
+```
 
-- `../rules/layer-rule.md`
-- `../rules/usecase-rule.md`
-- `../rules/repo-rule.md`
+---
+
+## relation 补查收口
+
+```go
+// ✅ relation 统一在 Repo 中装配
+func (r *accountRepo) GetAccount(ctx context.Context, id uint32, opts ...filter.Option) (*biz.Account, error) {
+    query := r.data.Db.Account(ctx).Query().Where(entaccount.IDEQ(id))
+    query = r.queryConfig(query, opts...)
+    info, err := query.First(ctx)
+    ...
+    res := r.queryRelation(accountConvert(info), info.Edges)
+    r.serviceRelation(ctx, res, opts...)
+    return res, nil
+}
+
+// ❌ Service 级别补查 reviewer
+func (s *AccountService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
+    account, _ := s.uc.GetAccount(ctx, req.Id)
+    reviewer, _ := s.adminUserRepo.GetAdminUser(ctx, account.ReviewerID)  // ❌ Service 补查 relation
+    account.Reviewer = reviewer
+    return convertToReply(account), nil
+}
+```
+
+---
+
+## 组合场景
+
+```go
+// 完整调用链：Service → UseCase → Repo
+func (s *AccountService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
+    info, err := s.uc.GetAccountDetail(ctx, req.Id)
+    if err != nil { return nil, err }
+    return &v1.GetAccountReply{Info: convertToProto(info)}, nil
+}
+
+func (u *AccountUseCase) GetAccountDetail(ctx context.Context, id uint32) (*Account, error) {
+    opts := []filter.Option{
+        filter.WithRelation(openenum.AccountCollectRelation),
+        filter.WithRelation(openenum.AccountCheckUserRelation),
+    }
+    return u.accountRepo.GetAccount(ctx, id, opts...)
+}
+
+func (r *accountRepo) GetAccount(ctx context.Context, id uint32, opts ...filter.Option) (*biz.Account, error) {
+    query := r.data.Db.Account(ctx).Query().Where(entaccount.IDEQ(id))
+    query = r.queryConfig(query, opts...)
+    info, err := query.First(ctx)
+    if err != nil {
+        if ent.IsNotFound(err) { return nil, openerror.ErrorAccountNotFound(ctx) }
+        return nil, err
+    }
+    res := r.queryRelation(accountConvert(info), info.Edges)
+    if err := r.serviceRelation(ctx, res, opts...); err != nil { return nil, err }
+    return res, nil
+}
+```
+
+---
+
+## 常见错误模式
+
+```go
+// ❌ Service 持有 Repo
+type AccountService struct { repo biz.AccountRepo }
+
+// ❌ Repo 处理状态流转
+func (r *accountRepo) ApproveAccount(ctx context.Context, id uint32) error {
+    account.Status = openenum.AccountStatusApproved  // 状态流转不应在 Repo
+    return r.data.Db.Account(ctx).UpdateOneID(id).SetStatus(account.Status).Exec(ctx)
+}
+
+// ❌ UseCase 在 Service 之后再补查 relation
+func (s *AccountService) Review(ctx context.Context, req) {
+    _ = s.uc.Review(ctx, req.Id)
+    account, _ := s.uc.GetAccount(ctx, req.Id)  // ❌ 重复查询
+}
+```

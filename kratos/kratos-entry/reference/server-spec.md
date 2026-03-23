@@ -1,56 +1,20 @@
-# Server Reference
+﻿# Server Spec
 
-## 这个主题解决什么问题
+## Service 职责范围
 
-说明 Kratos 项目中 gRPC/HTTP 服务实现和注册通常如何落位，以及新增接口时需要联动哪些位置。
+| 允许在 Service 层做 | 禁止在 Service 层做 |
+|--------------------|--------------------|
+| proto 字段转换（`req.Id` → `id uint32`） | 业务逻辑、状态判断 |
+| 元数据提取（`metadata.GetViewerID(ctx)`） | 调用 Repo 或直接访问 DB |
+| 调用 UseCase 方法 | 发布 EventBus |
+| 将 biz 对象转换为 proto reply | 控制事务边界 |
 
-## 适用场景
+---
 
-- 新增 gRPC/HTTP 接口
-- 调整服务注册
-- 检查 Service 与 Server 的连接关系
-
-## 设计意图
-
-Server 参考主要解释服务实现层为什么更像协议适配器，以及注册代码为什么要保持统一入口。
-
-- 服务实现越薄，业务变化越容易收敛到 UseCase，协议变化也越容易单独处理。
-- 注册路径统一后，新增接口时更容易知道该改哪里，而不是全仓库搜索散落路由。
-- 对外接口和内部业务分层稳定后，鉴权、观测和排障都会更顺畅。
-
-## 实施提示
-
-- 先从 proto/service 契约反推 service 方法签名。
-- 再把参数转换、身份提取和返回映射留在 service 层。
-- 如果一个 service 方法出现大量状态判断和数据拼装，通常应回看 UseCase/Repo 边界。
-
-## 推荐结构
-
-- `internal/service/`：服务实现
-- `internal/server/`：HTTP / gRPC server 初始化与注册
-
-## 典型实现方式
-
-```text
-proto 定义
--> service 实现
--> server 注册
--> wire/provider 检查
-```
-
-## 标准模板
+## Service 实现（协议适配器）
 
 ```go
-func NewHTTPServer(cfg *conf.Server, svc *service.AccountService) *http.Server {
-    srv := http.NewServer(...)
-    v1.RegisterAccountHTTPServer(srv, svc)
-    return srv
-}
-```
-
-## 代码示例参考
-
-```go
+// ✅ Service 只做 proto ↔ biz 转换，业务逻辑在 UseCase
 type AccountService struct {
     v1.UnimplementedAccountServer
     uc *biz.AccountUseCase
@@ -58,53 +22,108 @@ type AccountService struct {
 
 func (s *AccountService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
     info, err := s.uc.GetAccount(ctx, req.Id)
-    if err != nil {
-        return nil, err
+    if err != nil { return nil, err }
+    return &v1.GetAccountReply{Info: convertToProto(info)}, nil
+}
+
+// ❌ Service 做业务判断
+func (s *AccountService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
+    info, err := s.uc.GetAccount(ctx, req.Id)
+    if err != nil { return nil, err }
+    if info.Status != openenum.AccountStatusOpened {  // ❌ 业务判断不在 Service
+        return nil, errors.New(400, "NOT_OPEN", "账户未开户")
     }
     return &v1.GetAccountReply{Info: convertToProto(info)}, nil
 }
 ```
 
-## 项目通用注册示例
+---
+
+## Server 注册（统一入口）
 
 ```go
-func NewGRPCServer(
-    accountService *openservice.AccountService,
-    accountAdminService *adminservice.AccountService,
-    accountInnerService *innerservice.AccountService,
-    c *conf.Server,
-    _ log.Logger,
-) *grpc.Server {
-    srv := grpc.NewServer(...)
-
-    openv1.RegisterAccountServiceServer(srv, accountService)
-    adminv1.RegisterAccountServiceServer(srv, accountAdminService)
-    innerv1.RegisterAccountServiceServer(srv, accountInnerService)
-
+// ✅ 每个聚合根的注册在独立入口函数中
+func NewHTTPServer(cfg *conf.Server, lis net.Listener, svc *service.AccountService) *http.Server {
+    srv := http.NewServer(
+        http.Listener(lis),
+        http.Middleware(middleware.Server()...),
+    )
+    v1.RegisterAccountHTTPServer(srv, svc)
     return srv
 }
-```
 
-## Service 层参数转换示例
+func NewGRPCServer(cfg *conf.Server, lis net.Listener, svc *service.AccountService) *grpc.Server {
+    srv := grpc.NewServer(
+        grpc.Listener(lis),
+        grpc.Middleware(middleware.Server()...),
+    )
+    v1.RegisterAccountServer(srv, svc)
+    return srv
+}
 
-```go
-func (s *AccountService) GetAccountStatus(ctx context.Context, req *v1.GetAccountStatusRequest) (*v1.GetAccountStatusReply, error) {
-    userCode := strconv.FormatUint(uint64(metadata.GetViewerID(ctx)), 10)
-    status, err := s.uc.GetAccountStatus(ctx, userCode)
-    if err != nil {
-        return nil, err
-    }
-    return &v1.GetAccountStatusReply{OpenStatus: uint32(status)}, nil
+// ❌ 在多处散落注册
+func someOtherFile(srv *http.Server, svc *service.AccountService) {
+    v1.RegisterAccountHTTPServer(srv, svc)  // ❌ 注册散落在多处
 }
 ```
 
-## 常见坑
+---
 
-- 只写了 service 实现，忘记 server 注册
-- HTTP 和 gRPC 注册不一致
-- 新接口依赖已变，但 provider 未同步
+## Service 构造函数
 
-## 相关 Rule
+```go
+// ✅ 构造函数只接收 UseCase 依赖
+func NewAccountService(uc *biz.AccountUseCase) *AccountService {
+    return &AccountService{uc: uc}
+}
 
-- `../rules/server-rule.md`
-- `../rules/codegen-rule.md`
+// ❌ Service 构造时注入 Repo
+func NewAccountService(uc *biz.AccountUseCase, repo biz.AccountRepo) *AccountService {
+    return &AccountService{uc: uc, repo: repo}  // ❌ Service 不应持有 Repo
+}
+```
+
+---
+
+## 组合场景
+
+```go
+// 完整：proto → Service → UseCase → proto reply
+func (s *AccountService) PageListAccount(
+    ctx context.Context, req *v1.PageListAccountRequest,
+) (*v1.PageListAccountReply, error) {
+    pg := page.New(req.Paging)
+    sort := protohelper.ParseSort(req.Sort)
+    filterOpts := protohelper.ParseFilterConfig(req.Filter)
+
+    list, err := s.uc.PageListAccount(ctx, pg, sort, filterOpts...)
+    if err != nil { return nil, err }
+
+    items := make([]*v1.AccountItem, 0, len(list))
+    for _, a := range list {
+        items = append(items, convertToProtoItem(a))  // ✅ 转换在 Service
+    }
+    return &v1.PageListAccountReply{
+        List:   items,
+        Paging: protohelper.BuildPaging(pg),
+    }, nil
+}
+```
+
+---
+
+## 常见错误模式
+
+```go
+// ❌ Service 直接查询 Repo
+func (s *AccountService) GetAccount(ctx context.Context, req *v1.GetAccountRequest) (*v1.GetAccountReply, error) {
+    info, _ := s.repo.GetAccount(ctx, req.Id)  // ❌ 越层
+    return &v1.GetAccountReply{Info: convertToProto(info)}, nil
+}
+
+// ❌ Server 注册散落在多处业务文件
+// biz/account_usecase.go 包含 v1.RegisterAccountHTTPServer(...)  ❌
+
+// ❌ Service 方法过大（含大量 if/else 业务判断）
+// 超过 30 行的 Service 方法，通常意味着业务逻辑未下沉到 UseCase
+```
