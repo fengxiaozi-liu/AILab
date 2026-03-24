@@ -1,10 +1,9 @@
 ---
 name: speckit-specify
-description: |
-  用于 Speckit 研发流程的初始需求捕获与规格化，包括将自然语言转化为结构化的 spec.md (含 PRD、用户故事、验收标准等)。适用于接到模糊的初步需求，须明确核心需求边界、补充约束条件、消除逻辑黑洞，并要求最终可测试化的场景。触发关键词包括 specify、写 spec、需求捕获、PRD、用户故事。
+description: 用于 Speckit 研发流程的初始需求捕获与规格化，包括将自然语言转化为结构化的 spec.md (含 PRD、用户故事、验收标准等)。适用于接到模糊的初步需求，须明确核心需求边界、补充约束条件、消除逻辑黑洞，并要求最终可测试化的场景。触发关键词包括 specify、写 spec、需求捕获、PRD、用户故事。
 ---
 
-# Spec Kit Specify Skill（中文）
+# Spec Kit Specify Skill
 
 ## 何时使用
 
@@ -109,4 +108,5 @@ description: |
 
 - `specs/<feature>/spec.md`
 - `specs/<feature>/checklists/requirements.md`
-
+- 若生成的 `spec.md` 中包含待澄清问题（CQ），**MUST 明确高亮提示用户**：“发现需求盲区，请直接回复解答上述 Q&A 问题。解答完毕后，请按提示调用 `/clarify` 命令将您的回答澄清回填更新至文档。”
+- 若已全部澄清回填完毕且用户确认无误，**MUST 明确提示用户**：“需求已收敛闭环，请调用 `/plan` 命令开始生成执行计划。”

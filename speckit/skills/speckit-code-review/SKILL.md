@@ -1,7 +1,6 @@
 ---
 name: speckit-code-review
-description: |
-  用于 Speckit 研发流程中的代码审查，优先结合 spec、plan、tasks 对指定 feature 做完成度、正确性、架构、性能、安全和测试审查。适用于代码实现完成后做审查、修复后复审、提交前风险检查等场景。触发关键词包括 code review、review、代码审查、审查、风险检查、回归检查、完成度检查。该技能负责通用审查流程；当前项目类型由 agent 在运行时识别，并决定是否补充加载项目适配 skill 或语言 skill。
+description: 用于 Speckit 研发流程中的代码审查，优先结合 spec、plan、tasks 对指定 feature 做完成度、正确性、架构、性能、安全和测试审查。适用于代码实现完成后做审查、修复后复审、提交前风险检查等场景。触发关键词包括 code review、review、代码审查、审查、风险检查、回归检查、完成度检查。该技能负责通用审查流程；当前项目类型由 agent 在运行时识别，并决定是否补充加载项目适配 skill 或语言 skill。
 ---
 
 # Spec Kit Code Review Skill
@@ -262,3 +261,4 @@ agent 需要结合仓库事实识别当前项目类型与结构。
 ## 输出
 
 - 审查报告：`specs/<feature>/review.md` 或当前任务对应的审查结果
+- 完成后提示用户 review 审查报告，确认所有问题已修复后继续执行 `/summary` 生成完工总结。

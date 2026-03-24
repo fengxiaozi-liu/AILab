@@ -1,7 +1,6 @@
 ---
 name: speckit-analyze
-description: |
-  用于 Speckit 研发流程的一致性与质量校验 (只读)，包括跨文档扫描 spec.md、plan.md 和 tasks.md 之间的内容对齐度与逻辑矛盾。适用于任务拆解完成但未开始写代码前，需要做整体方案审计与防呆防漏的质量门检查，挖掘潜在实施风险的场景。触发关键词包括 analyze、校验、一致性、对齐检查、缺漏分析、逻辑矛盾。
+description: 用于 Speckit 研发流程的一致性与质量校验 (只读)，包括跨文档扫描 spec.md、plan.md 和 tasks.md 之间的内容对齐度与逻辑矛盾。适用于任务拆解完成但未开始写代码前，需要做整体方案审计与防呆防漏的质量门检查，挖掘潜在实施风险的场景。触发关键词包括 analyze、校验、一致性、对齐检查、缺漏分析、逻辑矛盾。
 ---
 
 # Spec Kit Analyze Skill
@@ -48,7 +47,7 @@ description: |
 
 1. RQ 追踪链：`RQ -> 设计项 -> Task`
 2. 实体一致性：spec / plan / tasks 术语与实体是否一致
-3. 治理规则集：上位执行要求 + MUST/SHOULD 语句
+3. 沌理规则集：上位执行要求 + MUST/SHOULD 语句
 
 ### 4. 检测类别
 
@@ -78,4 +77,4 @@ description: |
 ## 输出
 
 - `specs/<feature>/checklists/analyze.md`
-
+- 完成后提示用户确认分析结论，无遗漏后继续执行 `/specify` 生成正式 spec 或 `/plan` 制定计划。

@@ -1,7 +1,6 @@
 ---
 name: speckit-clarify
-description: |
-  用于 Speckit 研发流程的需求澄清与探讨，包括分析需求中不清晰或矛盾的点并收敛生成 CQ (Clarification Questions) 问题清单，确认后回写 spec。适用于面对逻辑缺失或极度模糊的需求，需要通过提问与用户互动以消除歧义并产出最小可行草案的场景。触发关键词包括 clarify、澄清需求、CQ、追问、消除歧义。
+description: 用于 Speckit 研发流程的需求澄清与探讨，包括分析需求中不清晰或矛盾的点并收敛生成 CQ (Clarification Questions) 问题清单，确认后回写 spec。适用于面对逻辑缺失或极度模糊的需求，需要通过提问与用户互动以消除歧义并产出最小可行草案的场景。触发关键词包括 clarify、澄清需求、CQ、追问、消除歧义。
 ---
 
 # Spec Kit Clarify Skill（中文）
@@ -91,5 +90,4 @@ description: |
 ## 输出
 
 - Spec 澄清模式：更新后的 `specs/<feature>/spec.md`
-- 输入澄清模式：CQ 澄清清单 + 澄清结论摘要（可选：转交 `/specify` 生成最小 spec）
-
+- 完成后提示用户确认澄清结论，无误后继续执行 `/specify` 生成正式 spec。
