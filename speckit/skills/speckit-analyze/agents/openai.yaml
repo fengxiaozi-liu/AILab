@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Analyze"
+  short_description: "Audit spec-plan-tasks consistency"
+  default_prompt: "Use $speckit-analyze to audit spec, plan, and tasks for consistency and gaps."

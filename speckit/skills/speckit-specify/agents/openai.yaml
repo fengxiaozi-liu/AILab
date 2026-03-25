@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Specify"
+  short_description: "Turn ideas into a testable spec"
+  default_prompt: "Use $speckit-specify to turn the current request into a structured, testable spec."

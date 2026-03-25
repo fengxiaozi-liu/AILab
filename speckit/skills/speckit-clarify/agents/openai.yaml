@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Clarify"
+  short_description: "Clarify ambiguous requirements and CQs"
+  default_prompt: "Use $speckit-clarify to resolve open CQs and clarify ambiguous requirements."

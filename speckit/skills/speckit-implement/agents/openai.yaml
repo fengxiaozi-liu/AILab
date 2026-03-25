@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Implement"
+  short_description: "Execute tasks.md phase by phase"
+  default_prompt: "Use $speckit-implement to execute tasks.md phase by phase and keep task state updated."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Code Review"
+  short_description: "Review implementation against spec"
+  default_prompt: "Use $speckit-code-review to review implementation quality against the spec, plan, and tasks."

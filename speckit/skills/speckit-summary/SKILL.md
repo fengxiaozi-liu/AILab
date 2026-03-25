@@ -1,7 +1,6 @@
 ---
 name: speckit-summary
-description: |
-  用于 Speckit 研发流程的闭环复盘与交付确认，包括汇总梳理研发全过程 (spec/plan/tasks/review) 并导出 summary.md 交付报告。适用于单阶段需求任务做收尾，需向上级汇报或跨团队交接核心变更点清单、接口文档索引总结和关键验证结果的场景。触发关键词包括 summary、总结、复盘、交付报告、变更汇总。
+description: 汇总 spec、plan、tasks、review 生成 summary.md。用于 feature 收尾与交付说明。
 ---
 
 # Spec Kit Summary Skill
