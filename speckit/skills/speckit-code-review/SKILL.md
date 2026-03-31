@@ -13,9 +13,11 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 
 ## 职责边界
 
-- `speckit-code-review` 负责**通用代码审查流程**
-- 它永远先做通用审查，再按需叠加项目或语言专属 skill
+- `speckit-code-review` 负责通用代码审查流程
+- 它永远先做通用审查，再按需叠加项目专属 skill
+- 进入 `Feature review` 或 `Project-aware review` 时，若仓库已能识别项目类型，必须加载对应项目 skill 并依据该 skill 的约束补充审查
 - 它是只读技能，不自动修改代码
+- 它输出的 `review.md` 除了审查结论外，还必须维护可被 `/fix` 消费的全局问题列表
 
 ## 输入
 
@@ -23,7 +25,7 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 - 优先：`specs/<feature>/plan.md`
 - 可选：`specs/<feature>/spec.md`
 - 实际代码、测试、配置、迁移、脚本等相关文件
-- 参考：`./references/review-rubric.md`
+- 输出模板：`./assets/review-template.md`
 
 ## 工作流
 
@@ -36,7 +38,7 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
    - 目标：检查实现是否覆盖 spec/plan/tasks 约束
 2. **Project-aware review**
    - 缺少完整 Speckit 上下文，但能识别项目类型
-   - 目标：在通用 rubric 上叠加项目适配规则
+   - 目标：在通用审查维度上叠加项目适配规则
 3. **General review**
    - 既无完整 Speckit 上下文，也无法可靠识别项目类型
    - 目标：退化为通用代码审查，并显式记录假设
@@ -46,32 +48,47 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 - Feature review：优先读取已完成任务关联的文件、测试和配置
 - Project-aware review：先识别项目类型，再读取核心入口、业务逻辑、对外接口和测试
 - General review：聚焦本次变更涉及的入口逻辑、数据访问、接口层和测试
+- depend SKILL：加载项目相关的 skill 以及规范内容
+- 如果仓库已识别出项目类型，输出中必须显式说明：
+  - 已加载了哪个项目 skill
+  - 为什么需要加载该 skill
+  - 本次审查额外采用了哪些项目约束
 
-### 3. 应用审查 rubric
+### 3. 应用审查维度
 
-始终以 `./references/review-rubric.md` 中的通用维度作为主干：
+始终以下列通用审查维度作为主干：
 
 - 完成度
 - 正确性
-- 架构与可维护性
+- 架构与规范
 - 性能
 - 安全
 - 测试
 
-如果识别到额外项目 skill 或语言 skill：
+同时在输出阶段优先沿用 `./assets/review-template.md` 的结构：
 
-- 将其 `MUST` 规则作为补充输入
-- 不允许用专属规则替代通用审查主干
+- 全局问题列表
+- 审查模式与上下文
+- 项目知识与规范依据
+- 完成度
+- 正确性
+- 架构与规范
+- 性能
+- 安全
+- 假设与未知项
+- 结论与下一步
 
 ### 4. 输出结论
 
 - 生成结构化审查报告
+- 报告结构优先遵循 `./assets/review-template.md`
+- 审查发现的问题需要同时归并到 `review.md` 的全局问题列表中，并按已解决/未解决分组维护
 - 若存在 feature 上下文，写入 `specs/<feature>/review.md`
 - 若不存在 feature 上下文，则在当前任务范围内输出审查结果
 
 ## 输出
 
-- 审查报告：`specs/<feature>/review.md` 或当前任务对应的审查结果
+- 审查报告：`specs/<feature>/review.md`
 - 审查完成后：
   - 若存在高优先级问题，提示修复后重新 `/code-review`
   - 若审查通过，提示进入 `/summary`

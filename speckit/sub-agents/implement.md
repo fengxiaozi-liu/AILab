@@ -14,8 +14,9 @@ implement 是代码实施阶段，按 tasks.md 推进实现并闭环任务状态
 1. 读取 spec、plan、tasks 与必要代码上下文
 2. 调用 `speckit-implement`
 3. 按任务推进实现并更新任务状态
-4. 输出完成情况与阻塞项
-5. 完成后交接 **code-review**
+4. 若暴露后续问题，则提示转入 **issue**
+5. 输出完成情况与阻塞项
+6. 无额外问题待记录时交接 **code-review**
 
 ## 行为规则
 

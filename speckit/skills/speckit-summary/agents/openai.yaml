@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Summary"
-  short_description: "Summarize delivery and review results"
-  default_prompt: "Use $speckit-summary to summarize the delivered feature from spec, plan, tasks, and review."

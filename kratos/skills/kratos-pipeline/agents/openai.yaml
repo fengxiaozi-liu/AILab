@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kratos Pipeline"
+  short_description: "Kratos 编码工作流与联动检查 pipeline"
+  default_prompt: "Use this skill to implement Kratos code changes step by step, including routing, naming, layer placement, pkg/enum abstraction, linkage checks, verification, and delivery notes."

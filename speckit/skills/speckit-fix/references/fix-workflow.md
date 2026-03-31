@@ -1,61 +1,79 @@
-# Fix Workflow
+# Fix 工作流
 
-## Purpose
+## 目的
 
-Use this file as the operating contract for `speckit-fix`.
-The goal is to repair issue-scoped problems in one pass without turning the repair pass into a new feature.
+本文文件是 `speckit-fix` 的执行契约。目标是在不扩张 feature 范围的前提下，围绕问题文档中的未解决问题，按 `Specify -> Clarify -> Plan -> Tasks -> Implement` 的顺序完成一次可恢复的修复闭环。
 
-## Required Inputs
+## 必需输入
 
-- `specs/<feature>/issue.md`
+- `specs/<feature>/issue.md` 或 `specs/<feature>/review.md`
 - `specs/<feature>/spec.md`
 
-Optional supporting inputs:
+问题文档可以由 `/issue`、`/code-review` 或人工创建，但 `/fix` 启动前必须存在。
+
+可选辅助输入：
 
 - `specs/<feature>/plan.md`
 - `specs/<feature>/tasks.md`
-- `specs/<feature>/review.md`
+- 另一份问题文档
 
-## Repair Rules
+## 修复规则
 
-- The original `spec.md` remains the highest boundary constraint
-- Every repair item must map back to an `ISSUE-xxx`
-- If a proposed change cannot be justified by an issue item, do not include it
-- If solving the issue requires expanding the feature scope, stop and request a new feature flow
-- Treat human-written issue content as the minimal source of truth
-- Fill missing metadata, scope, and trace fields during the AI repair flow
-- Run clarify, plan, tasks, and implement as one continuous `/fix` execution
+- 原始 `spec.md` 始终是本次修复的最高边界约束
+- 每一个修复动作都必须能映射回某个未解决的问题项
+- 若某项修改无法被现有问题正当化，不得纳入本次修复
+- 若解决问题需要扩张 feature 范围，必须停止并提示另建 feature
+- 人工填写的问题内容视为事实来源，AI 只补结构、结论和最小必要元数据
+- 来源问题文档是本次修复全流程的持久化文档
+- 默认处理来源文档中所有未解决的问题项
+- 若来源文档存在全局问题列表，则状态更新规则为：未解决使用 `[ ]`，已解决使用 `[✅️]`
 
-## Stage Expectations
+## 停止与恢复规则
+
+- 若 `Specify` 发现阻塞性歧义，必须先写入 `澄清记录` 再停止
+- 在阻塞性澄清未完成前，不得继续进入 `Plan`、`Tasks` 或 `Implement`
+- 用户在来源文档中补完澄清后，下一次 `/fix` 必须从 `Clarify` 继续
+- 恢复执行时不得重建已有问题项，也不得重写已完成阶段的内容
+
+## 阶段要求
+
+### Specify
+
+- 读取来源文档中的未解决问题项
+- 对每个问题检查 `问题说明`、`当前现象`、`期望行为`、`证据或复现` 是否足以支撑后续规划
+- 若信息不足，按澄清模板写入 `澄清记录`
+- 每个澄清问题必须给出互斥选项，便于用户在文档中直接选择或填写答案
+- 写入后立即停止，并提醒用户进入对应问题文档完成澄清
 
 ### Clarify
 
-- Resolve ambiguous issue statements
-- Confirm expected behavior
-- Confirm repair boundary
-- Complete any missing issue fields that are needed for planning
+- 读取用户在 `澄清记录` 中填写的答案
+- 把澄清结论回填到对应问题项的结构化字段
+- 若仍然无法安全规划，则继续补充新的澄清问题并停止
+- 仅在所有待修复问题达到可规划状态后，才允许进入 `Plan`
 
 ### Plan
 
-- Identify root cause area
-- List impacted modules and files
-- Define validation strategy
-- State explicit out-of-scope items
-- Keep the repair plan as internal reasoning unless the user explicitly asks to persist it
+- 按计划模板在来源文档中创建或更新 `修复计划`
+- 计划必须覆盖：修复目标、影响范围、根因判断、修复边界、验证方式、明确不做项
+- 计划内容必须严格围绕未解决问题，不得引入无关需求
 
 ### Tasks
 
-- Break the repair into small, file-targeted tasks
-- Keep each task scoped to issue resolution
-- Keep the repair tasks as internal reasoning unless the user explicitly asks to persist them
+- 按任务模板在来源文档中创建或更新 `修复任务`
+- 每个任务必须映射回至少一个问题项
+- 每个任务都必须可执行、可验证、可打勾
+- 任务状态统一使用 `- [ ]` 和 `- [✅️]`
 
 ### Implement
 
-- Apply the minimal safe fix
-- Validate the affected path
-- Update issue status after implementation
+- 按 `修复任务` 中的待办项完成代码修改与验证
+- 每完成一项任务，就将对应任务从 `- [ ]` 更新为 `- [✅️]`
+- 某个问题的全部任务完成后，应将其在全局问题列表中的状态更新为 `[✅️]`
+- 若来源文档使用 `未解决问题 / 已解决问题` 分组，应同步移动到 `已解决问题`
 
-## Suggested Outputs
+## 建议输出
 
-- Updated `specs/<feature>/issue.md`
-- Code changes required to resolve the issue-scoped problems
+- 更新后的来源问题文档
+- 必要的代码修改
+- 若进入阻塞状态，明确提示用户去对应问题文档完成澄清

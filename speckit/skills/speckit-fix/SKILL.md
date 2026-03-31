@@ -1,84 +1,131 @@
 ---
 name: speckit-fix
-description: 基于当前 feature 的 issue.md 做受边界约束的问题修复。用于 issue 已记录，且需要一次性完成 clarify、plan、tasks、implement 修复闭环时。
+description: 基于当前 feature 的问题文档做受边界约束的问题修复。用于 `issue.md` 或 `review.md` 中的问题已记录，且需要按 Specify、Clarify、Plan、Tasks、Implement 阶段回写原问题文档并完成修复闭环时。
 ---
 
 # Speckit Fix
 
 ## 何时使用
 
-- 当前 feature 已存在 `specs/<feature>/issue.md`
-- `issue.md` 中记录了本次需求实施过程中暴露的问题
+- 当前 feature 已存在 `specs/<feature>/issue.md` 或 `specs/<feature>/review.md`
+- 问题文档已通过 `/issue`、`/code-review` 或人工方式准备完成
+- 问题文档中存在一个或多个未完成的问题项
 - 需要围绕这些问题做一次受控修复，而不是扩展成新需求
 
 ## 职责边界
 
-- `speckit-fix` 只修复 `issue.md` 中记录的当前 feature 问题
-- `/fix` 必须在一次执行中按 Clarify -> Plan -> Tasks -> Implement 的顺序完成闭环
+- `speckit-fix` 修复问题来源文档中记录的当前 feature 问题，来源文档可以是 `issue.md` 或 `review.md`
+- `/fix` 必须在一次执行中按 `Specify -> Clarify -> Plan -> Tasks -> Implement` 的顺序完成闭环
+- 仅当来源文档中有相关执行计划与任务之后才允许进行 implement，实现工程更改
+- `/fix` 默认处理来源文档中所有未完成的问题项
+- `/fix` 负责把澄清、计划、任务与执行结果持续回写到原问题文档
+- `/fix` 使用参考模板生成 `澄清记录`、`修复计划`、`修复任务` 章节
 - 修复工作不得偏离当前 feature 的既有目标和边界
-- 若 issue 本质上是新需求或范围扩张，必须停止并要求单独建 feature
+- 若问题本质上是新需求或范围扩张，必须停止并要求单独建 feature
 
 ## 输入
 
-- 必需：`specs/<feature>/issue.md`
-- 必需：`specs/<feature>/spec.md`
+- 必须：`specs/<feature>/issue.md` 或 `specs/<feature>/review.md`
+- 必须：`specs/<feature>/spec.md`
 - 可选：`specs/<feature>/plan.md`
 - 可选：`specs/<feature>/tasks.md`
-- 可选：`specs/<feature>/review.md`
-- 参考：`./references/fix-workflow.md`
+- 可选：另一份问题文档（`issue.md` 或 `review.md`）
+- 参考工作流：`./references/fix-workflow.md`
+- 输出模板：`./assets/clarify-template.md`
+- 输出模板：`./assets/plan-template.md`
+- 输出模板：`./assets/tasks-template.md`
 
 ## 工作流
 
 ### 1. 前置检查
 
-1. 读取 `issue.md`，确认存在待修复问题
-2. 读取原始 `spec.md`，把它作为本次修复的最高边界约束
-3. 若存在 `plan.md` / `tasks.md` / `review.md`，一并读取用于定位问题来源
-4. 明确说明本次修复只处理 `issue.md` 中列出的当前 feature 问题
-5. 优先从人工填写的最小信息中提取问题事实，再补全 issue 的其余结构字段
+1. 识别本次修复的来源文档是 `issue.md` 还是 `review.md`
+2. 读取来源文档，确认存在未完成的问题项
+3. 读取原始 `spec.md`，把它作为本次修复的最高边界约束
+4. 若存在 `plan.md` / `tasks.md` / 另一份问题文档，一并读取用于定位问题来源
+5. 读取 `./references/fix-workflow.md`、`./assets/clarify-template.md`、`./assets/plan-template.md`、`./assets/tasks-template.md`
+6. 明确说明本次修复只处理来源文档中列出的当前 feature 问题
+7. 按来源文档中的问题顺序扫描所有未完成项，判断每项当前处于哪个阶段
 
-### 2. Clarify 阶段
+### 2. Specify 阶段
 
-对 `issue.md` 中每个待修复问题做边界澄清：
+对每一个未完成问题项：
 
-- 问题是否描述清楚
-- 期望行为是否明确
-- 修复边界是否明确
-- 是否会引出新的非本次需求内容
+- 先根据用户原生问题，对该问题做结构化
+- 将原生问题整理并回填到：
+  - `问题说明`
+  - `当前现象`
+  - `期望行为`
+  - `证据或复现`
+- 若已能直接理解，则在不打断用户的前提下直接写清这些字段
+- 若无须澄清，则为该问题写入“无需澄清”的结果，并进入 `Clarify` 阶段
+- 若仍存在关键歧义，必须：
+  - 按 `./assets/clarify-template.md` 在来源文档中写入 `澄清记录`
+  - 每个澄清问题必须提供互斥选项，便于用户直接二选一或多选一回复
+  - 明确提醒用户进入对应问题文档补充澄清答案
+  - 立即停止整个 `/fix` 运行，不得提前进入 `Plan`
 
-若存在未决项：
+### 3. Clarify 阶段
 
-- 先在修复工作上下文中补齐澄清结论
-- 不允许跳过澄清直接规划和实施
-- Clarify 完成后直接进入 Plan，不要求用户额外再次调用命令
+仅在以下条件满足时进入：
 
-### 3. Plan 阶段
+- 当前问题无待处理澄清项，或
+- 用户已在来源文档的 `澄清记录` 中补充了答案
 
-为本次修复生成受控修复计划：
+执行要求：
 
-- 聚焦问题根因、受影响任务、受影响文件和验证方式
-- 计划只覆盖 issue 中的问题，不引入额外功能
-- 必须显式列出“修复边界”与“明确不做”
-- 计划可作为内部推演过程使用，不强制单独落盘
+- 将用户填写的澄清答案回填为已澄清结论，并同步更新对应问题项的结构化字段
+- 若澄清信息仍不足以安全规划，则继续按 `澄清记录` 模板补充互斥问题并停止
+- 仅在当前问题已达到可规划状态时，才允许进入 `Plan` 阶段
 
-### 4. Tasks 阶段
+### 4. Plan 阶段
 
-把修复计划拆成最小可执行任务：
+按 `./assets/plan-template.md` 在来源文档中回写真正的修复计划：
 
-- 任务应能映射回 issue 项
-- 每个任务都要注明目标文件或产物
+- 计划覆盖本次修复涉及的问题、根因、影响范围、修复边界与验证方式
+- 不引入问题范围外的新功能或大规模无关重构
+- 明确写出：
+  - 修复目标
+  - 受影响的问题、模块或文件
+  - 验证方法
+  - 明确不做
+- 仅当 plan 内容回写到来源文档时，认为 plan 阶段完成
+- `Plan` 阶段完成后，进入 `Tasks` 阶段
+
+### 5. Tasks 阶段
+
+按 `./assets/tasks-template.md` 在来源文档中回写真正的 todo 项：
+
+- 任务必须映射回对应问题项
+- 任务必须是实现导向、可验证、可打勾的 todo 项
 - 不允许把 unrelated cleanup 混入修复任务
-- 任务可作为内部推演过程使用，不强制单独落盘
+- todo 项直接使用 `- [ ] T001 ...` 这种格式
+- 仅当 tasks 内容回写到来源文档时，认为 task 阶段完成
+- `Tasks` 阶段完成后，进入 `Implement` 阶段
 
-### 5. Implement 阶段
+### 6. Implement 阶段
 
-按修复任务执行代码修改与验证：
+按 `修复任务` 区块中的 todo 项执行代码修改与验证：
 
-- 仅修改修复问题所需的最小范围
-- 按任务状态真实回写
-- 完成后同步更新 `issue.md` 中对应问题的修复状态
+- 仅修改解决该问题所需的最小范围
+- 按真实完成情况将对应任务从 `- [ ]` 更新为 `- [✅️]`
+- 全部任务完成后，将对应问题在全局问题列表中的状态更新为 `[✅️]`
+- 若来源文档存在 `待解决问题` / `未解决问题` 分组，则将已解决问题移入 `已解决问题`
+- 完成信号以任务打钩为准，不再单独维护额外的任务完成字段
+
+## 停止与恢复
+
+- 若在 `Specify` 或 `Clarify` 阶段发现仍需用户澄清，必须停止当前 `/fix`
+- 停止前必须先把以下内容写回来源文档：
+  - 问题摘要
+  - `澄清记录`
+  - 当前阶段
+- 用户补充后，下一次 `/fix` 不得从头重建问题项
+- 应从当前问题的 `Clarify` 阶段继续，再进入 `Plan -> Tasks -> Implement`
 
 ## 输出
 
-- 更新后的 `specs/<feature>/issue.md`
-- 完成后提示进入 `/code-review`
+- 更新后的来源问题文档：`specs/<feature>/issue.md` 或 `specs/<feature>/review.md`
+- 对已完成任务的 todo 项打 `[✅️]`
+- 若某个问题已完成修复，则同步更新全局问题列表状态
+- 若全部闭环完成，提示进入 `/code-review`

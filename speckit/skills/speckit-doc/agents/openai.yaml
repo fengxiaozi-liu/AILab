@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speckit Doc"
+  short_description: "Initialize or update architecture.md from repo facts"
+  default_prompt: "Use $speckit-doc to initialize or update docs/architecture.md from repository facts and speckit artifacts."

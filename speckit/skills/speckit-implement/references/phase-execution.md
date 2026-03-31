@@ -1,40 +1,40 @@
-# Phase Execution Guide
+# Phase 执行指南
 
-## Purpose
+## 目的
 
-Use this file as the execution guardrail for `speckit-implement`.
-It defines how to move through `tasks.md` without crossing phases or faking progress.
+将本文件作为 `speckit-implement` 的执行约束说明。
+它定义了如何沿着 `tasks.md` 推进，而不跨越 Phase，也不虚报进度。
 
-## Phase Cursor Rules
+## Phase 游标规则
 
-- Treat the first unfinished Phase as the active execution context
-- Read later phases only for architectural foresight, not for early implementation
-- Ignore completed tasks except as context
+- 将第一个未完成的 Phase 视为当前唯一的执行上下文
+- 读取后续 Phase 仅用于架构预判，不得提前实现
+- 已完成任务仅作为上下文参考，不再重复推进
 
-## Task Batching Rules
+## 任务分批规则
 
-- Prefer batching tasks that touch the same module or highly related files
-- Avoid mixing unrelated technical areas in one batch unless `tasks.md` explicitly groups them
-- Keep each batch small enough to validate before moving on
+- 优先将涉及同一模块或强相关文件的任务放在同一批处理
+- 除非 `tasks.md` 已明确分组，否则避免在同一批中混入无关技术领域的任务
+- 每一批任务都应足够小，能够在继续推进前完成验证
 
-## Status Writeback Rules
+## 状态回写规则
 
-- Mark `[✅️]` only after the code has actually been written
-- Update `tasks.md` regularly within the active phase
-- Do not postpone all writeback until the end of the project
-- If a task is blocked, report it explicitly instead of pretending partial completion
+- 只有在代码已真实落地后，才可标记 `[✅️]`
+- 在当前 Phase 内应持续更新 `tasks.md`
+- 不允许把所有状态回写拖到项目末尾一次性补写
+- 若任务被阻塞，应明确报告，而不是伪装成部分完成
 
-## Skill Loading Rules
+## Skill 加载规则
 
-- If the active task clearly falls under another installed skill, load that skill before implementation
-- Reuse already loaded skills within the same phase when appropriate
-- If a missing skill becomes obvious mid-implementation, pause, load it, and review the code already written
+- 若当前任务明显属于其他已安装 skill 的职责范围，应在实施前先加载该 skill
+- 在同一 Phase 内，如已加载的 skill 仍适用，应优先复用
+- 若在实施过程中才发现缺少必要 skill，应暂停当前推进，加载该 skill，并回看已写代码是否需要调整
 
-## Blocked State Guidance
+## 阻塞状态指引
 
-When blocked, report:
+当出现阻塞时，应明确报告以下内容：
 
-1. Which task is blocked
-2. Why it is blocked
-3. What has already been completed
-4. What user decision or missing input is needed
+1. 哪个任务被阻塞
+2. 阻塞原因是什么
+3. 已经完成了哪些内容
+4. 还需要用户做什么决策，或补充什么输入
