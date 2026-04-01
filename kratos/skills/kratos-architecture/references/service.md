@@ -14,6 +14,16 @@
 
 本文重点回答接入层如何稳定组织，不展开领域建模、聚合根识别、公共能力下沉与代码风格红线。
 
+## 规则
+
+- 接入层主线保持 `proto -> service -> server`，其中 `service` 只做协议适配并调用 `usecase`
+- `proto` 是契约事实源，`server / gateway` 只做暴露与转发，不承载业务编排
+- 涉及 `wire / provider / codegen` 的改动，必须同步评估生成链路与接入层装配闭环
+- 不要把领域规则、状态推进或持久化细节塞进 `service / server / gateway`
+- `service`下只允许调用`usecase`边界，不允许直接调用repo，eventbus或其他基础设置组件
+- `proto` 优先围绕聚合根、实体或稳定第三方对象边界组织，不按页面动作或阶段动作拆文件
+- 不是每个实体都必须有独立 `service/proto`；只有需要对外暴露业务能力时，才形成对应 `UseCase`、`service` 与协议归属
+
 ## 接入层主线
 
 Kratos 接入层通常围绕以下主线展开：
@@ -45,15 +55,16 @@ proto -> service -> server
 边界提示：
 
 - `proto` 设计优先围绕稳定服务边界，而不是围绕页面动作临时拆文件
+- `proto` 文件优先围绕聚合根、实体或稳定第三方对象边界组织，而不是围绕页面动作临时拆文件
 - side 之间不直接互引业务 proto，共享协议应回到公共位置收敛
 - 修改接口结构时，优先回到 `proto` 源定义，而不是手改生成物
 
 ### `proto` 文件组织
 
-- 引入新的核心聚合根或稳定业务对象时，新建对应 `proto` 文件
+- 引入新的核心聚合根、稳定实体或稳定第三方对象边界时，新建对应 `proto` 文件
 - 同一聚合根在不同 side 暴露接口时，在对应 side 目录下维护对应 `proto`
 - 只是为已有聚合补动作、查询或稳定接口时，优先追加到现有聚合 `proto`
-- 纯公共结构提取到 `api/base/*`
+- 若某个实体不直接对外暴露能力，则不要求单独新增 `service/proto`
 
 ### OpenAPI v3 文档注解
 
@@ -169,6 +180,7 @@ api/system/inner/v1/captcha.proto
 - `service` 只做协议适配，不承担业务编排
 - `service` 不直接访问 `repo`
 - `service` 不维护状态机、事务边界或领域规则
+- `service` 暴露的是 `UseCase` 能力，而不是“每个实体都必须有一个对应 service”
 
 示例：
 

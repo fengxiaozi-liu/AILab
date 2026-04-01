@@ -12,6 +12,14 @@
 - 判断 `ent`、`listener`、`consumer`、`crontab`、`event` 的职责边界
 - 判断 provider / `wire` / 注册入口应如何收敛
 
+## 规则
+
+- 组件层只负责接入、注册、生命周期管理与最小适配，不承担业务编排、事务裁决或领域主线组织
+- `listener / consumer / crontab / server / event bus` 等运行时组件不得演化成隐藏的 `UseCase`
+- `ent / wire / provider / event / listener` 的变更应同时评估生成链路、注册链路与运行时影响
+- event bus 默认按进程内同步钩子理解；迁移其事务内外位置时，应直接按事务语义变化处理
+- MySQL 下统一使用 `OnConflict()` 组织冲突更新，不使用 `OnConflictColumns(...)`
+
 ## 组件定位
 
 组件层负责：
@@ -152,6 +160,11 @@ go generate ./internal/data/ent
 - payload 优先复用稳定对象，必要时单独定义 payload
 - 发布方只发布事实，不为订阅方额外拼装
 - 事件不替代事务边界
+- 当前仓库中的 event bus 默认视为进程内同步分发机制，不要按异步 MQ / eventual consistency 理解
+- event bus 更接近钩子函数或本地回调分发，用于抽离部分后置逻辑，不天然形成新的异步边界
+- 若 `Publish` 发生在事务闭包内，则 listener 的执行与失败传播属于当前事务语义的一部分
+- 若把原本事务内的 `Publish` 迁到事务外，必须显式评估是否改变回滚语义、失败传播路径、状态可见性与执行顺序
+- 不要仅因“看起来更像事件驱动”就把本地同步 event bus 当成异步解耦手段；先判断是否会改变原有业务一致性
 
 ## provider、`wire` 与生命周期
 

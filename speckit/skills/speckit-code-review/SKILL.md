@@ -13,6 +13,7 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 
 ## 职责边界
 
+- 在代码审查的时候以不遗漏为准则，避免二次审查
 - `speckit-code-review` 负责通用代码审查流程
 - 它永远先做通用审查，再按需叠加项目专属 skill
 - 进入 `Feature review` 或 `Project-aware review` 时，若仓库已能识别项目类型，必须加载对应项目 skill 并依据该 skill 的约束补充审查
@@ -78,9 +79,28 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 - 假设与未知项
 - 结论与下一步
 
-### 4. 输出结论
+### 4. 输出前合并审查问题
 
-- 生成结构化审查报告
+在生成最终 `review.md` 前，必须先收集并合并本次审查的全部标准化 findings。
+这些 findings 可以来自：
+
+- 通用代码审查
+- 项目审查 skill
+- feature 上下文偏差检查
+
+所有输入 findings 必须先标准化为统一结构后再参与合并。
+禁止直接拼接不同 skill 的自然语言结论。
+
+合并时必须满足：
+
+- 对重复 findings 去重
+- 若项目审查 finding 比通用 finding 更具体，则以更具体版本覆盖
+- 最终所有保留 findings 统一编号、统一分类、统一落入全局问题列表
+- 最终只输出一份合并后的 `review.md`
+
+### 5. 输出报告
+
+- 生成结构化审查报告`review.md`
 - 报告结构优先遵循 `./assets/review-template.md`
 - 审查发现的问题需要同时归并到 `review.md` 的全局问题列表中，并按已解决/未解决分组维护
 - 若存在 feature 上下文，写入 `specs/<feature>/review.md`
@@ -89,6 +109,6 @@ description: 按 spec、plan、tasks 审查实现质量并生成 review.md。用
 ## 输出
 
 - 审查报告：`specs/<feature>/review.md`
-- 审查完成后：
-  - 若存在高优先级问题，提示修复后重新 `/code-review`
-  - 若审查通过，提示进入 `/summary`
+- 提示: 
+  1. 提示用户审查报告
+  2. 提示用户报告无误后进入`/fix`
