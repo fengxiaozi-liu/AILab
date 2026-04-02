@@ -22,7 +22,9 @@
 - 不要把领域规则、状态推进或持久化细节塞进 `service / server / gateway`
 - `service`下只允许调用`usecase`边界，不允许直接调用repo，eventbus或其他基础设置组件
 - `proto` 优先围绕聚合根、实体或稳定第三方对象边界组织，不按页面动作或阶段动作拆文件
-- 不是每个实体都必须有独立 `service/proto`；只有需要对外暴露业务能力时，才形成对应 `UseCase`、`service` 与协议归属
+- 一旦某个主题已经独立定义 `UseCase` 且该能力需要对外暴露，就必须建立对应的 `service` 与 `proto`
+- 不要出现“已有独立 `UseCase` 对外提供能力，但仍长期借挂在无关 `service/proto`”的情况；协议主题应与 `UseCase` 主题对齐
+- 若某个实体或主题不直接对外暴露能力，则不要求单独新增 `service/proto`
 
 ## 接入层主线
 
@@ -64,7 +66,9 @@ proto -> service -> server
 - 引入新的核心聚合根、稳定实体或稳定第三方对象边界时，新建对应 `proto` 文件
 - 同一聚合根在不同 side 暴露接口时，在对应 side 目录下维护对应 `proto`
 - 只是为已有聚合补动作、查询或稳定接口时，优先追加到现有聚合 `proto`
-- 若某个实体不直接对外暴露能力，则不要求单独新增 `service/proto`
+  前提：这些动作仍属于该聚合既有 `UseCase/service` 主题，而不是已经独立成新的 `UseCase` owner
+- 若已经形成独立 `UseCase` owner 并对外暴露能力，则应新建并收敛到对应 `proto/service`
+- 若某个实体或主题不直接对外暴露能力，则不要求单独新增 `service/proto`
 
 ### OpenAPI v3 文档注解
 
@@ -180,7 +184,8 @@ api/system/inner/v1/captcha.proto
 - `service` 只做协议适配，不承担业务编排
 - `service` 不直接访问 `repo`
 - `service` 不维护状态机、事务边界或领域规则
-- `service` 暴露的是 `UseCase` 能力，而不是“每个实体都必须有一个对应 service”
+- `service` 暴露的是 `UseCase` 能力
+- 当某个能力已经独立为单独 `UseCase` 且需要对外暴露时，应有与之对应的 `service`，不要长期复用其他主题的 `service` 承载该能力
 
 示例：
 
