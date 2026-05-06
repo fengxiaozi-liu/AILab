@@ -6,10 +6,6 @@
 
 `AISupport/` 是资产目录。`AISupport/<package>` 是安装单元，每个 package 可以包含 skills、sub-agents、templates、references 等内容。
 
-| Package | 说明 |
-| --- | --- |
-| `speckit` | 结构化规格、澄清、计划、任务、实施、评审、总结工作流 |
-
 ## utils
 
 `utils/` 存放仓库工具。当前主要工具是 `utils/ferryPilot/`。
