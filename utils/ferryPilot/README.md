@@ -1,65 +1,79 @@
 # ferryPilot
 
-`ferryPilot` 是一个 Go CLI 安装器，用于安装本仓库 `AISupport/` 目录中的 AI 支持资产。
-
-当前实现独立于 `utils/ferryPilot` 下的旧 Python 实现；它不会导入、运行、复制或依赖这些旧文件。
+`ferryPilot` 是用于安装本仓库 `AISupport/` 资产的 Go CLI 工具。
 
 ## 构建
 
 ```bash
-go build -o bin/ferryPilot ./cmd/ferryPilot
+make test
+make build
 ```
 
-Windows 下可以使用：
+Windows:
 
 ```powershell
-go build -o bin\ferryPilot.exe .\cmd\ferryPilot
+make test
+make build
 ```
 
-## 测试
+## 终端启动
+
+从仓库根目录进入 `ferryPilot` 工具目录：
 
 ```bash
-go test ./...
+cd utils/ferryPilot
 ```
 
-## 使用方式
+构建后可以直接从 `bin/` 目录启动本地可执行文件：
 
 ```bash
-ferryPilot -g speckit
+make build
+./bin/ferryPilot -p speckit
+```
+
+Windows PowerShell:
+
+```powershell
+cd utils\ferryPilot
+make build
+.\bin\ferryPilot -p
+```
+
+如果已经通过安装脚本或系统 PATH 安装了 `ferryPilot`，可以在任意终端目录直接运行：
+
+```bash
 ferryPilot -p speckit
-ferryPilot -g -t codex speckit
+```
+
+## 使用
+
+```bash
+ferryPilot -p speckit
+ferryPilot -g speckit
+ferryPilot -p -t codex speckit
 ferryPilot -p -t cursor speckit
+ferryPilot -p -t claude speckit
 ferryPilot -p -t copilot speckit
-ferryPilot -g -t claude speckit
-ferryPilot -g -t gemini speckit
+ferryPilot -p -t gemini speckit
 ```
 
 参数说明：
 
-- `-g`, `--global`：安装到当前用户的 Agent 运行时目录。
-- `-p`, `--project`：安装到当前项目目录。
-- `-t`, `--target`：选择目标 Agent，默认值为 `codex`。
+| 参数 | 说明 |
+| --- | --- |
+| `-p`, `--project` | 安装到当前项目目录 |
+| `-g`, `--global` | 安装到当前用户的全局 Agent 目录 |
+| `-t`, `--target` | 指定目标 Agent，默认是 `codex` |
+| `--config` | 使用外部 `file_map.json` 覆盖内置默认配置 |
 
-支持的 target 在 `config/file_map.json` 中配置。默认配置包含 `codex`、`cursor`、`claude`、`copilot` 和 `gemini`。
+如果省略 package 名称，并且存在多个可选 package，`ferryPilot` 会在终端中提供上下键选择。
 
-如果省略 package 名称，并且存在多个可选 package，`ferryPilot` 会提示用户选择。
+## 配置
 
-## 数据源
+默认 `file_map.json` 已通过 Go `embed` 编译进可执行文件。默认配置使用 git 数据源，运行时会 clone 数据源仓库到系统临时目录，从 `AISupport/<package>` 安装文件，完成后清理临时目录。
 
-`ferryPilot` 读取 `config/file_map.json` 来确定：
+需要覆盖默认配置时：
 
-- 作为 AISupport 数据源的 git 仓库
-- 默认 target
-- 每个 target 的全局安装映射和项目安装映射
-
-运行时会将配置中的 git 仓库 clone 到临时目录，然后从 `tmp/AISupport/<package>` 安装文件到所选目标目录。安装完成后，临时 checkout 会被清理。
-
-## 发布
-
-当推送匹配 `v*` 的 tag 时，GitHub Actions 会构建发布产物。支持的目标平台包括：
-
-- `windows/amd64`
-- `linux/amd64`
-- `darwin/amd64`
-- `darwin/arm64`
-
+```bash
+ferryPilot -p --config path/to/file_map.json speckit
+```

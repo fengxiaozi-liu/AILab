@@ -11,6 +11,8 @@ import (
 	"ferrypilot/internal/config"
 	"ferrypilot/internal/install"
 	"ferrypilot/internal/packages"
+
+	"golang.org/x/term"
 )
 
 const ToolName = "ferryPilot"
@@ -122,13 +124,22 @@ func choosePackage(options Options, available []packages.Package) (string, error
 	if options.Input == nil || options.Output == nil {
 		return "", fmt.Errorf("package name is required; available packages: %s", packageNames(available))
 	}
-	fmt.Fprintln(options.Output, "Select an AISupport package:")
-	for i, candidate := range available {
-		fmt.Fprintf(options.Output, "%d) %s\n", i+1, candidate.Name)
+	if input, ok := terminalFile(options.Input); ok {
+		if output, ok := terminalFile(options.Output); ok && term.IsTerminal(int(input.Fd())) && term.IsTerminal(int(output.Fd())) {
+			return choosePackageInteractive(input, options.Output, available)
+		}
 	}
-	fmt.Fprint(options.Output, "Package: ")
+	return choosePackagePrompt(options.Input, options.Output, available)
+}
+
+func choosePackagePrompt(input io.Reader, output io.Writer, available []packages.Package) (string, error) {
+	fmt.Fprintln(output, "Select an AISupport package:")
+	for i, candidate := range available {
+		fmt.Fprintf(output, "%d) %s\n", i+1, candidate.Name)
+	}
+	fmt.Fprint(output, "Package: ")
 	var selected string
-	if _, err := fmt.Fscan(options.Input, &selected); err != nil {
+	if _, err := fmt.Fscan(input, &selected); err != nil {
 		return "", fmt.Errorf("read package selection: %w", err)
 	}
 	for i, candidate := range available {
@@ -137,6 +148,123 @@ func choosePackage(options Options, available []packages.Package) (string, error
 		}
 	}
 	return "", fmt.Errorf("unknown package selection %q", selected)
+}
+
+func choosePackageInteractive(input fileReader, output io.Writer, available []packages.Package) (string, error) {
+	oldState, err := term.MakeRaw(int(input.Fd()))
+	if err != nil {
+		return "", fmt.Errorf("enable interactive package selection: %w", err)
+	}
+	defer term.Restore(int(input.Fd()), oldState)
+
+	selected := 0
+	renderedLines := 0
+	render := func() {
+		if renderedLines > 0 {
+			fmt.Fprintf(output, "\x1b[%dA", renderedLines)
+		}
+		fmt.Fprintln(output, "Select an AISupport package:")
+		for i, candidate := range available {
+			prefix := "  "
+			if i == selected {
+				prefix = "> "
+			}
+			fmt.Fprintf(output, "\x1b[2K\r%s%s\n", prefix, candidate.Name)
+		}
+		renderedLines = len(available) + 1
+	}
+
+	render()
+	buffer := make([]byte, 1)
+	for {
+		if _, err := input.Read(buffer); err != nil {
+			return "", fmt.Errorf("read package selection: %w", err)
+		}
+		switch buffer[0] {
+		case 3:
+			return "", errors.New("package selection canceled")
+		case '\r', '\n':
+			fmt.Fprintf(output, "\r\n")
+			return available[selected].Name, nil
+		case 27:
+			key, err := readEscapeKey(input)
+			if err != nil {
+				return "", err
+			}
+			switch key {
+			case "up":
+				if selected == 0 {
+					selected = len(available) - 1
+				} else {
+					selected--
+				}
+				render()
+			case "down":
+				selected = (selected + 1) % len(available)
+				render()
+			}
+		case 0, 224:
+			key, err := readWindowsKey(input)
+			if err != nil {
+				return "", err
+			}
+			switch key {
+			case "up":
+				if selected == 0 {
+					selected = len(available) - 1
+				} else {
+					selected--
+				}
+				render()
+			case "down":
+				selected = (selected + 1) % len(available)
+				render()
+			}
+		}
+	}
+}
+
+func readEscapeKey(input io.Reader) (string, error) {
+	sequence := make([]byte, 2)
+	if _, err := io.ReadFull(input, sequence); err != nil {
+		return "", fmt.Errorf("read package selection: %w", err)
+	}
+	if sequence[0] != '[' {
+		return "", nil
+	}
+	switch sequence[1] {
+	case 'A':
+		return "up", nil
+	case 'B':
+		return "down", nil
+	default:
+		return "", nil
+	}
+}
+
+func readWindowsKey(input io.Reader) (string, error) {
+	buffer := make([]byte, 1)
+	if _, err := input.Read(buffer); err != nil {
+		return "", fmt.Errorf("read package selection: %w", err)
+	}
+	switch buffer[0] {
+	case 72:
+		return "up", nil
+	case 80:
+		return "down", nil
+	default:
+		return "", nil
+	}
+}
+
+type fileReader interface {
+	io.Reader
+	Fd() uintptr
+}
+
+func terminalFile(value any) (fileReader, bool) {
+	file, ok := value.(fileReader)
+	return file, ok
 }
 
 func packageNames(available []packages.Package) string {

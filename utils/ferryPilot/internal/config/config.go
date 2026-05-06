@@ -2,11 +2,15 @@ package config
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 )
+
+//go:embed file_map.json
+var defaultFileMap []byte
 
 type FileMap struct {
 	DataSource    DataSource        `json:"data_source"`
@@ -34,20 +38,20 @@ type Target struct {
 
 func Load(path string, workDir string) (FileMap, error) {
 	if path == "" {
-		var err error
-		path, err = FindDefault(workDir)
-		if err != nil {
-			return FileMap{}, err
-		}
+		return parse(defaultFileMap, "embedded default file_map.json")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return FileMap{}, fmt.Errorf("read file map %s: %w", path, err)
 	}
+	return parse(content, path)
+}
+
+func parse(content []byte, source string) (FileMap, error) {
 	content = bytes.TrimPrefix(content, []byte{0xEF, 0xBB, 0xBF})
 	var fileMap FileMap
 	if err := json.Unmarshal(content, &fileMap); err != nil {
-		return FileMap{}, fmt.Errorf("parse file map %s: %w", path, err)
+		return FileMap{}, fmt.Errorf("parse file map %s: %w", source, err)
 	}
 	if fileMap.DefaultTarget == "" {
 		fileMap.DefaultTarget = "codex"
@@ -64,28 +68,10 @@ func Load(path string, workDir string) (FileMap, error) {
 func FindDefault(workDir string) (string, error) {
 	candidates := []string{}
 	if workDir != "" {
-		candidates = append(candidates,
-			filepath.Join(workDir, "config", "file_map.json"),
-			filepath.Join(workDir, "utils", "ferryPilotGo", "config", "file_map.json"),
-		)
-		current, err := filepath.Abs(workDir)
-		if err == nil {
-			for {
-				candidates = append(candidates, filepath.Join(current, "utils", "ferryPilotGo", "config", "file_map.json"))
-				parent := filepath.Dir(current)
-				if parent == current {
-					break
-				}
-				current = parent
-			}
-		}
+		candidates = appendDefaultCandidates(candidates, workDir)
 	}
 	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "config", "file_map.json"),
-			filepath.Join(exeDir, "file_map.json"),
-		)
+		candidates = appendDefaultCandidates(candidates, filepath.Dir(exe))
 	}
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
@@ -93,6 +79,24 @@ func FindDefault(workDir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("file_map.json not found")
+}
+
+func appendDefaultCandidates(candidates []string, start string) []string {
+	current, err := filepath.Abs(start)
+	if err != nil {
+		current = start
+	}
+	for {
+		candidates = append(candidates,
+			filepath.Join(current, "config", "file_map.json"),
+			filepath.Join(current, "file_map.json"),
+		)
+		parent := filepath.Dir(current)
+		if parent == current {
+			return candidates
+		}
+		current = parent
+	}
 }
 
 func LookupTarget(fileMap FileMap, name string) (string, Target, error) {

@@ -1,58 +1,40 @@
 # AI Agent Skill
 
-本仓库用于分发面向编码 Agent 的 AI 支持资产。仓库包含可复用的 skills、sub-agents、references、templates，以及用于把这些资产安装到本地 Agent 运行时或项目目录中的 `ferryPilot` 安装工具。
+本仓库用于分发面向编码 Agent 的 AI 支持资产，并提供 `ferryPilot` 工具把这些资产安装到本地 Agent 运行时或当前项目目录。
 
-## 仓库内容
+## AISupport
 
-- `AISupport/`：可安装的 AI 支持资产包。
-- `utils/ferryPilotGo/`：`ferryPilot` CLI 安装器的 Go 实现。
-- `specs/`：特性规格、实施计划和任务清单。
-- `docs/`：项目结构、维护方式和发布流程的项目级文档。
+`AISupport/` 是资产目录。`AISupport/<package>` 是安装单元，每个 package 可以包含 skills、sub-agents、templates、references 等内容。
 
-## 快速开始
+| Package | 说明 |
+| --- | --- |
+| `speckit` | 结构化规格、澄清、计划、任务、实施、评审、总结工作流 |
+| `kratos` | 面向 Kratos 项目的架构、流水线和评审支持资产 |
 
-可以从 GitHub Release 下载 `ferryPilot` 二进制文件，也可以在本地构建：
+## utils
 
-```bash
-cd utils/ferryPilotGo
-go build -o bin/ferryPilot ./cmd/ferryPilot
+`utils/` 存放仓库工具。当前主要工具是 `utils/ferryPilot/`。
+
+### ferryPilot
+
+`ferryPilot` 是 Go 编写的 CLI 安装器，用于把 `AISupport` 中的 package 安装到目标 Agent。工具介绍、构建命令、使用方式和配置说明请见 [`utils/ferryPilot/README.md`](utils/ferryPilot/README.md)。
+
+#### 一键安装
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/fengxiaozi-liu/ai_agent_skill/main/scripts/install.ps1 | iex
 ```
 
-全局安装一个 AISupport 包：
+Linux/macOS:
 
 ```bash
-./bin/ferryPilot -g speckit
+curl -fsSL https://raw.githubusercontent.com/fengxiaozi-liu/ai_agent_skill/main/scripts/install.sh | sh
 ```
 
-安装到当前项目：
+安装脚本会下载最新 Release，把 `ferryPilot` 放到用户目录并加入 PATH。重新打开终端后即可使用：
 
 ```bash
-./bin/ferryPilot -p speckit
+ferryPilot -p speckit
 ```
-
-为指定 target agent 安装：
-
-```bash
-./bin/ferryPilot -g -t codex speckit
-./bin/ferryPilot -p -t cursor speckit
-```
-
-如果省略 package 名称，并且存在多个可选 package，`ferryPilot` 会提示用户选择。
-
-## 发布构建
-
-当推送匹配 `v*` 的 tag 时，GitHub Actions 会自动构建发布产物。当前发布矩阵包括：
-
-- `windows/amd64`
-- `linux/amd64`
-- `darwin/amd64`
-- `darwin/arm64`
-
-产物会附加到 GitHub Release，例如 `ferryPilot-windows-amd64.tar.gz`。每个归档包都包含可执行文件和 `config/file_map.json`。
-
-## 文档
-
-- [项目概览](docs/project.md)
-- [ferryPilot Go 安装器](docs/ferryPilot.md)
-- [发布流程](docs/release.md)
-

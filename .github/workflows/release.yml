@@ -31,7 +31,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: utils/ferryPilotGo
+        working-directory: utils/ferryPilot
 
     steps:
       - name: Checkout
@@ -40,7 +40,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: utils/ferryPilotGo/go.mod
+          go-version-file: utils/ferryPilot/go.mod
 
       - name: Test
         run: go test ./...
@@ -49,14 +49,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          package_dir="dist/ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}"
-          mkdir -p "$package_dir/config"
-          output="$package_dir/ferryPilot${{ matrix.ext }}"
+          output="dist/ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$output" ./cmd/ferryPilot
-          cp config/file_map.json "$package_dir/config/file_map.json"
-          tar -czf "dist/ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" -C dist "ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" != "windows" ]; then
+            chmod +x "$output"
+          fi
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@v2
         with:
-          files: utils/ferryPilotGo/dist/ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          files: utils/ferryPilot/dist/ferryPilot-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}

@@ -2,6 +2,6 @@
 /**/__pycache__/
 release/
 .venv/
-.vscocde/
-utils/ferryPilotGo/bin/
-utils/ferryPilotGo/dist/
+.vscode/
+utils/ferryPilot/bin/
+utils/ferryPilot/dist/
