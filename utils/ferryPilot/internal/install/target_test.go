@@ -44,11 +44,11 @@ func TestResolveTargetProjectCursor(t *testing.T) {
 
 func TestResolveTargetAdditionalAgents(t *testing.T) {
 	tests := []struct {
-		name string
-		mode string
+		name  string
+		mode  string
 		agent string
-		root string
-		want string
+		root  string
+		want  string
 	}{
 		{name: "claude global", mode: "global", agent: "claude", root: "home", want: filepath.Join("home", ".claude", "skills")},
 		{name: "copilot project", mode: "project", agent: "copilot", root: "project", want: filepath.Join("project", ".github", "skills")},

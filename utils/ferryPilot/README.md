@@ -1,50 +1,65 @@
 # ferryPilot
 
-ferryPilot is a CLI installer for local AI support assets stored in this repository's `AISupport/` directory.
+`ferryPilot` 是一个 Go CLI 安装器，用于安装本仓库 `AISupport/` 目录中的 AI 支持资产。
 
-## Project Layout
+当前实现独立于 `utils/ferryPilot` 下的旧 Python 实现；它不会导入、运行、复制或依赖这些旧文件。
 
-```text
-.
-├── AISupport/
-│   ├── kratos/
-│   │   └── skills/
-│   └── speckit/
-│       ├── skills/
-│       └── sub-agents/
-└── utils/
-    └── ferryPilot/
-```
-
-`AISupport/<package>` is the install unit. For example, selecting `speckit` installs everything under `AISupport/speckit/skills` and `AISupport/speckit/sub-agents`.
-
-## Usage
+## 构建
 
 ```bash
-# Install one AISupport package globally
-codepilot -g
-
-# Install one AISupport package into the current project
-codepilot -p
-
-# Install for a specific target agent
-codepilot -g -t codex
-codepilot -p -t cursor
+go build -o bin/ferryPilot ./cmd/ferryPilot
 ```
 
-## Behavior
+Windows 下可以使用：
 
-- `-g / --global` installs into the current user's home directory.
-- `-p / --project` installs into the current working directory.
-- The installer scans only the first-level directories under `AISupport/`, such as `speckit` and `kratos`.
-- After selecting a package, all installable content under that package is copied according to `src/config/file_map.json`.
-- Codex `sub-agents/*.md` files are converted to `.toml` during installation, preserving the previous installer behavior.
+```powershell
+go build -o bin\ferryPilot.exe .\cmd\ferryPilot
+```
 
-## Build
+## 测试
 
 ```bash
-make install
-make package
+go test ./...
 ```
 
-The PyInstaller package includes both `src/config/file_map.json` and the repository-level `AISupport/` directory, so the released executable can install the bundled support assets directly.
+## 使用方式
+
+```bash
+ferryPilot -g speckit
+ferryPilot -p speckit
+ferryPilot -g -t codex speckit
+ferryPilot -p -t cursor speckit
+ferryPilot -p -t copilot speckit
+ferryPilot -g -t claude speckit
+ferryPilot -g -t gemini speckit
+```
+
+参数说明：
+
+- `-g`, `--global`：安装到当前用户的 Agent 运行时目录。
+- `-p`, `--project`：安装到当前项目目录。
+- `-t`, `--target`：选择目标 Agent，默认值为 `codex`。
+
+支持的 target 在 `config/file_map.json` 中配置。默认配置包含 `codex`、`cursor`、`claude`、`copilot` 和 `gemini`。
+
+如果省略 package 名称，并且存在多个可选 package，`ferryPilot` 会提示用户选择。
+
+## 数据源
+
+`ferryPilot` 读取 `config/file_map.json` 来确定：
+
+- 作为 AISupport 数据源的 git 仓库
+- 默认 target
+- 每个 target 的全局安装映射和项目安装映射
+
+运行时会将配置中的 git 仓库 clone 到临时目录，然后从 `tmp/AISupport/<package>` 安装文件到所选目标目录。安装完成后，临时 checkout 会被清理。
+
+## 发布
+
+当推送匹配 `v*` 的 tag 时，GitHub Actions 会构建发布产物。支持的目标平台包括：
+
+- `windows/amd64`
+- `linux/amd64`
+- `darwin/amd64`
+- `darwin/arm64`
+
