@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="fengxiaozi-liu/ai_agent_skill"
+repo="fengxiaozi-liu/AILab"
 install_dir="$HOME/.local/bin"
 
 os="$(uname -s)"

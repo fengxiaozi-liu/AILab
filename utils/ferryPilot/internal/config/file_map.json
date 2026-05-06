@@ -1,7 +1,7 @@
 {
   "data_source": {
     "type": "git",
-    "repository": "https://github.com/fengxiaozi-liu/ai_agent_skill.git",
+    "repository": "https://github.com/fengxiaozi-liu/AILab.git",
     "ref": ""
   },
   "default_target": "codex",

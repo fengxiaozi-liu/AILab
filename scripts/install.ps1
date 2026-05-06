@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$repo = "fengxiaozi-liu/ai_agent_skill"
+$repo = "fengxiaozi-liu/AILab"
 $asset = "ferryPilot-windows-amd64.exe"
 $installDir = Join-Path $env:USERPROFILE "bin"
 $target = Join-Path $installDir "ferryPilot.exe"

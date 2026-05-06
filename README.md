@@ -24,13 +24,13 @@
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/fengxiaozi-liu/ai_agent_skill/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/fengxiaozi-liu/AILab/main/scripts/install.ps1 | iex
 ```
 
 Linux/macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fengxiaozi-liu/ai_agent_skill/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/fengxiaozi-liu/AILab/main/scripts/install.sh | sh
 ```
 
 安装脚本会下载最新 Release，把 `ferryPilot` 放到用户目录并加入 PATH。重新打开终端后即可使用：
