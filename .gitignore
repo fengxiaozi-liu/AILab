@@ -3,3 +3,5 @@
 release/
 .venv/
 .vscocde/
+utils/ferryPilotGo/bin/
+utils/ferryPilotGo/dist/

@@ -1,0 +1,129 @@
+{
+  "data_source": {
+    "type": "git",
+    "repository": "https://github.com/fengxiaozi-liu/ai_agent_skill.git",
+    "ref": ""
+  },
+  "default_target": "codex",
+  "targets": {
+    "codex": {
+      "global": [
+        {
+          "source": "skills",
+          "destination": ".codex/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".codex/agents",
+          "transform": true
+        }
+      ],
+      "project": [
+        {
+          "source": "skills",
+          "destination": ".codex/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".codex/agents",
+          "transform": true
+        }
+      ]
+    },
+    "cursor": {
+      "global": [
+        {
+          "source": "skills",
+          "destination": ".cursor/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".cursor/agents",
+          "transform": true
+        }
+      ],
+      "project": [
+        {
+          "source": "skills",
+          "destination": ".cursor/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".cursor/agents",
+          "transform": true
+        }
+      ]
+    },
+    "claude": {
+      "global": [
+        {
+          "source": "skills",
+          "destination": ".claude/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".claude/agents",
+          "transform": false
+        }
+      ],
+      "project": [
+        {
+          "source": "skills",
+          "destination": ".claude/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".claude/agents",
+          "transform": false
+        }
+      ]
+    },
+    "copilot": {
+      "global": [],
+      "project": [
+        {
+          "source": "skills",
+          "destination": ".github/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".github/agents",
+          "transform": false
+        }
+      ]
+    },
+    "gemini": {
+      "global": [
+        {
+          "source": "skills",
+          "destination": ".gemini/antigravity/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".gemini/antigravity/workflows",
+          "transform": false
+        }
+      ],
+      "project": [
+        {
+          "source": "skills",
+          "destination": ".agent/skills",
+          "transform": false
+        },
+        {
+          "source": "sub-agents",
+          "destination": ".agent/workflows",
+          "transform": false
+        }
+      ]
+    }
+  }
+}
