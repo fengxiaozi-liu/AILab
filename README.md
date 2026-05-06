@@ -9,7 +9,6 @@
 | Package | 说明 |
 | --- | --- |
 | `speckit` | 结构化规格、澄清、计划、任务、实施、评审、总结工作流 |
-| `kratos` | 面向 Kratos 项目的架构、流水线和评审支持资产 |
 
 ## utils
 
@@ -34,7 +33,3 @@ curl -fsSL https://raw.githubusercontent.com/fengxiaozi-liu/AILab/main/scripts/i
 ```
 
 安装脚本会下载最新 Release，把 `ferryPilot` 放到用户目录并加入 PATH。重新打开终端后即可使用：
-
-```bash
-ferryPilot -p speckit
-```
