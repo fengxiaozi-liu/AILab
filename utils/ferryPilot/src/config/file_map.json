@@ -1,0 +1,52 @@
+{
+  "global": {
+    "source": {},
+    "target": {
+      "codex": {
+        "skills": ".codex/skills",
+        "sub_agents": ".codex/agents"
+      },
+      "copilot": {
+        "skills": ".copilot/skills",
+        "sub_agents": ".copilot/agents"
+      },
+      "claude": {
+        "skills": ".claude/skills",
+        "sub_agents": ".claude/agents"
+      },
+      "gemini": {
+        "skills": ".gemini/antigravity/skills",
+        "sub_agents": ".gemini/antigravity/agents"
+      },
+      "cursor": {
+        "skills": ".cursor/skills",
+        "sub_agents": ".cursor/agents"
+      }
+    }
+  },
+  "project": {
+    "source": {},
+    "target": {
+      "codex": {
+        "skills": ".codex/skills",
+        "sub_agents": ".codex/agents"
+      },
+      "copilot": {
+        "skills": ".github/skills",
+        "sub_agents": ".github/agents"
+      },
+      "claude": {
+        "skills": ".claude/skills",
+        "sub_agents": ".claude/agents"
+      },
+      "gemini": {
+        "skills": ".agents/skills",
+        "sub_agents": ".agents/agents"
+      },
+      "cursor": {
+        "skills": ".cursor/skills",
+        "sub_agents": ".cursor/agents"
+      }
+    }
+  }
+}

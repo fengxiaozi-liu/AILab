@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Issue"
-  short_description: "Create or append feature issue.md"
-  default_prompt: "Use $speckit-issue to create or update the current feature issue.md from the template. If a slash-command argument contains a problem description, write it into 用户问题 and immediately structure it into an ISSUE unit instead of only appending raw text."

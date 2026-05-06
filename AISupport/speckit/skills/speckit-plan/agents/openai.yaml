@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Plan"
-  short_description: "Draft a technical implementation plan"
-  default_prompt: "Use $speckit-plan to turn the current requirements into a technical implementation plan."

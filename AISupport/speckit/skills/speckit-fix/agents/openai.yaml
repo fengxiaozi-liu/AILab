@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Fix"
-  short_description: "Fix issue-scoped feature problems"
-  default_prompt: "Use $speckit-fix to fix the issues recorded in the current feature issue.md without expanding scope."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Checklist"
-  short_description: "Generate spec quality checklist items"
-  default_prompt: "Use $speckit-checklist to find requirement gaps and turn them into CQ items."

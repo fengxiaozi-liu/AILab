@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Design"
-  short_description: "Compare design options and ADRs"
-  default_prompt: "Use $speckit-design to compare technical options and produce an ADR-style design."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Speckit Tasks"
-  short_description: "Break plan.md into executable tasks"
-  default_prompt: "Use $speckit-tasks to break the plan into executable phased tasks."
