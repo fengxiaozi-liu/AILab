@@ -63,10 +63,10 @@ ferryPilot -p -t gemini speckit
 | --- | --- |
 | `-p`, `--project` | 安装到当前项目目录 |
 | `-g`, `--global` | 安装到当前用户的全局 Agent 目录 |
-| `-t`, `--target` | 指定目标 Agent，默认是 `codex` |
+| `-t`, `--target` | 指定目标 Agent；省略时会在终端中选择 |
 | `--config` | 使用外部 `file_map.json` 覆盖内置默认配置 |
 
-如果省略 package 名称，并且存在多个可选 package，`ferryPilot` 会在终端中提供上下键选择。
+如果省略 `-t/--target`，并且存在多个可选 Agent，`ferryPilot` 会先在终端中提供上下键选择；随后如果省略 package 名称，并且存在多个可选 package，也会继续提供上下键选择。
 
 ## 配置
 

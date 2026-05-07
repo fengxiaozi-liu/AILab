@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"ferrypilot/internal/assets"
@@ -58,7 +59,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, ctx.Err()
 	default:
 	}
+	showCursorAfterRun := hideTerminalCursor(options.Output)
+	defer showCursorAfterRun()
+
 	fileMap, err := config.Load(options.ConfigPath, options.WorkDir)
+	if err != nil {
+		return Result{}, err
+	}
+	targetName, err := chooseTarget(options, fileMap)
 	if err != nil {
 		return Result{}, err
 	}
@@ -78,7 +86,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	target, err := install.ResolveTarget(install.TargetOptions{
 		FileMap: fileMap,
 		Mode:    string(options.Mode),
-		Target:  options.Target,
+		Target:  targetName,
 		HomeDir: options.HomeDir,
 		WorkDir: options.WorkDir,
 	})
@@ -106,6 +114,24 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}, nil
 }
 
+func chooseTarget(options Options, fileMap config.FileMap) (string, error) {
+	if options.Target != "" {
+		name, _, err := config.LookupTarget(fileMap, options.Target)
+		return name, err
+	}
+	available := targetNames(fileMap)
+	if len(available) == 0 {
+		return "", errors.New("no target agents found")
+	}
+	if len(available) == 1 {
+		return available[0], nil
+	}
+	if options.Input == nil || options.Output == nil {
+		return "", fmt.Errorf("target agent is required; available targets: %s", strings.Join(available, ", "))
+	}
+	return chooseNamedItem(options.Input, options.Output, "target agent", "Target", available, fileMap.DefaultTarget)
+}
+
 func choosePackage(options Options, available []packages.Package) (string, error) {
 	if len(available) == 0 {
 		return "", errors.New("no AISupport packages found")
@@ -124,52 +150,64 @@ func choosePackage(options Options, available []packages.Package) (string, error
 	if options.Input == nil || options.Output == nil {
 		return "", fmt.Errorf("package name is required; available packages: %s", packageNames(available))
 	}
-	if input, ok := terminalFile(options.Input); ok {
-		if output, ok := terminalFile(options.Output); ok && term.IsTerminal(int(input.Fd())) && term.IsTerminal(int(output.Fd())) {
-			return choosePackageInteractive(input, options.Output, available)
-		}
-	}
-	return choosePackagePrompt(options.Input, options.Output, available)
+	return chooseNamedItem(options.Input, options.Output, "AISupport package", "Package", packageNamesList(available), "")
 }
 
-func choosePackagePrompt(input io.Reader, output io.Writer, available []packages.Package) (string, error) {
-	fmt.Fprintln(output, "Select an AISupport package:")
-	for i, candidate := range available {
-		fmt.Fprintf(output, "%d) %s\n", i+1, candidate.Name)
+func chooseNamedItem(input io.Reader, output io.Writer, itemName string, prompt string, available []string, defaultName string) (string, error) {
+	if inputFile, ok := terminalFile(input); ok {
+		if outputFile, ok := terminalFile(output); ok && term.IsTerminal(int(inputFile.Fd())) && term.IsTerminal(int(outputFile.Fd())) {
+			return chooseInteractive(inputFile, output, itemName, available, defaultName)
+		}
 	}
-	fmt.Fprint(output, "Package: ")
+	return choosePrompt(input, output, itemName, prompt, available)
+}
+
+func choosePrompt(input io.Reader, output io.Writer, itemName string, prompt string, available []string) (string, error) {
+	fmt.Fprintf(output, "Select a %s:\n", itemName)
+	for i, candidate := range available {
+		fmt.Fprintf(output, "%d) %s\n", i+1, candidate)
+	}
+	fmt.Fprintf(output, "%s: ", prompt)
 	var selected string
 	if _, err := fmt.Fscan(input, &selected); err != nil {
-		return "", fmt.Errorf("read package selection: %w", err)
+		return "", fmt.Errorf("read %s selection: %w", itemName, err)
 	}
 	for i, candidate := range available {
-		if selected == candidate.Name || selected == fmt.Sprint(i+1) {
-			return candidate.Name, nil
+		if selected == candidate || selected == fmt.Sprint(i+1) {
+			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("unknown package selection %q", selected)
+	return "", fmt.Errorf("unknown %s selection %q", itemName, selected)
 }
 
-func choosePackageInteractive(input fileReader, output io.Writer, available []packages.Package) (string, error) {
+func chooseInteractive(input fileReader, output io.Writer, itemName string, available []string, defaultName string) (string, error) {
 	oldState, err := term.MakeRaw(int(input.Fd()))
 	if err != nil {
-		return "", fmt.Errorf("enable interactive package selection: %w", err)
+		return "", fmt.Errorf("enable interactive %s selection: %w", itemName, err)
 	}
 	defer term.Restore(int(input.Fd()), oldState)
 
 	selected := 0
+	if defaultName != "" {
+		for i, candidate := range available {
+			if candidate == defaultName {
+				selected = i
+				break
+			}
+		}
+	}
 	renderedLines := 0
 	render := func() {
 		if renderedLines > 0 {
 			fmt.Fprintf(output, "\x1b[%dA", renderedLines)
 		}
-		fmt.Fprintln(output, "Select an AISupport package:")
+		fmt.Fprintf(output, "Select a %s:\n", itemName)
 		for i, candidate := range available {
 			prefix := "  "
 			if i == selected {
 				prefix = "> "
 			}
-			fmt.Fprintf(output, "\x1b[2K\r%s%s\n", prefix, candidate.Name)
+			fmt.Fprintf(output, "\x1b[2K\r%s%s\n", prefix, candidate)
 		}
 		renderedLines = len(available) + 1
 	}
@@ -178,16 +216,15 @@ func choosePackageInteractive(input fileReader, output io.Writer, available []pa
 	buffer := make([]byte, 1)
 	for {
 		if _, err := input.Read(buffer); err != nil {
-			return "", fmt.Errorf("read package selection: %w", err)
+			return "", fmt.Errorf("read %s selection: %w", itemName, err)
 		}
 		switch buffer[0] {
 		case 3:
-			return "", errors.New("package selection canceled")
+			return "", fmt.Errorf("%s selection canceled", itemName)
 		case '\r', '\n':
-			fmt.Fprintf(output, "\r\n")
-			return available[selected].Name, nil
+			return available[selected], nil
 		case 27:
-			key, err := readEscapeKey(input)
+			key, err := readEscapeKey(input, itemName)
 			if err != nil {
 				return "", err
 			}
@@ -204,7 +241,7 @@ func choosePackageInteractive(input fileReader, output io.Writer, available []pa
 				render()
 			}
 		case 0, 224:
-			key, err := readWindowsKey(input)
+			key, err := readWindowsKey(input, itemName)
 			if err != nil {
 				return "", err
 			}
@@ -224,10 +261,20 @@ func choosePackageInteractive(input fileReader, output io.Writer, available []pa
 	}
 }
 
-func readEscapeKey(input io.Reader) (string, error) {
+func hideTerminalCursor(output io.Writer) func() {
+	if outputFile, ok := terminalFile(output); ok && term.IsTerminal(int(outputFile.Fd())) {
+		fmt.Fprint(output, "\x1b[?25l")
+		return func() {
+			fmt.Fprint(output, "\x1b[?25h")
+		}
+	}
+	return func() {}
+}
+
+func readEscapeKey(input io.Reader, itemName string) (string, error) {
 	sequence := make([]byte, 2)
 	if _, err := io.ReadFull(input, sequence); err != nil {
-		return "", fmt.Errorf("read package selection: %w", err)
+		return "", fmt.Errorf("read %s selection: %w", itemName, err)
 	}
 	if sequence[0] != '[' {
 		return "", nil
@@ -242,10 +289,10 @@ func readEscapeKey(input io.Reader) (string, error) {
 	}
 }
 
-func readWindowsKey(input io.Reader) (string, error) {
+func readWindowsKey(input io.Reader, itemName string) (string, error) {
 	buffer := make([]byte, 1)
 	if _, err := input.Read(buffer); err != nil {
-		return "", fmt.Errorf("read package selection: %w", err)
+		return "", fmt.Errorf("read %s selection: %w", itemName, err)
 	}
 	switch buffer[0] {
 	case 72:
@@ -268,9 +315,29 @@ func terminalFile(value any) (fileReader, bool) {
 }
 
 func packageNames(available []packages.Package) string {
+	return strings.Join(packageNamesList(available), ", ")
+}
+
+func packageNamesList(available []packages.Package) []string {
 	names := make([]string, 0, len(available))
 	for _, candidate := range available {
 		names = append(names, candidate.Name)
 	}
-	return strings.Join(names, ", ")
+	return names
+}
+
+func targetNames(fileMap config.FileMap) []string {
+	names := make([]string, 0, len(fileMap.Targets))
+	for name := range fileMap.Targets {
+		if name != fileMap.DefaultTarget {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	if fileMap.DefaultTarget != "" {
+		if _, ok := fileMap.Targets[fileMap.DefaultTarget]; ok {
+			names = append([]string{fileMap.DefaultTarget}, names...)
+		}
+	}
+	return names
 }
