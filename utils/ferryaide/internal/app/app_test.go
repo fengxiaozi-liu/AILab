@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"ferrypilot/internal/config"
+	"ferryaide/internal/config"
 )
 
 func TestChooseTargetUsesExplicitTarget(t *testing.T) {

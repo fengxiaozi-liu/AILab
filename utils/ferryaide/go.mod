@@ -1,4 +1,4 @@
-module ferrypilot
+module ferryaide
 
 go 1.22
 

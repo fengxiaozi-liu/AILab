@@ -3,5 +3,5 @@
 release/
 .venv/
 .vscode/
-utils/ferryPilot/bin/
-utils/ferryPilot/dist/
+utils/ferryaide/bin/
+utils/ferryaide/dist/

@@ -4,7 +4,7 @@
 
 | 系统 | 架构 | 文件 |
 | --- | --- | --- |
-| Windows | amd64 | `ferryPilot-windows-amd64.exe` |
-| Linux | amd64 | `ferryPilot-linux-amd64` |
-| macOS | amd64 | `ferryPilot-darwin-amd64` |
-| macOS | arm64 | `ferryPilot-darwin-arm64` |
+| Windows | amd64 | `ferryaide-windows-amd64.exe` |
+| Linux | amd64 | `ferryaide-linux-amd64` |
+| macOS | amd64 | `ferryaide-darwin-amd64` |
+| macOS | arm64 | `ferryaide-darwin-arm64` |

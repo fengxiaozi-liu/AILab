@@ -8,17 +8,17 @@ import (
 	"sort"
 	"strings"
 
-	"ferrypilot/internal/assets"
-	"ferrypilot/internal/config"
-	"ferrypilot/internal/install"
-	"ferrypilot/internal/packages"
+	"ferryaide/internal/assets"
+	"ferryaide/internal/config"
+	"ferryaide/internal/install"
+	"ferryaide/internal/packages"
 
 	"golang.org/x/term"
 )
 
-const ToolName = "ferryPilot"
+const ToolName = "ferryaide"
 
-var ErrNotImplemented = errors.New("ferryPilot Go implementation is not complete yet")
+var ErrNotImplemented = errors.New("ferryaide Go implementation is not complete yet")
 
 type InstallMode string
 

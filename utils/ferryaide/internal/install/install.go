@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ferrypilot/internal/assets"
-	"ferrypilot/internal/transform"
+	"ferryaide/internal/assets"
+	"ferryaide/internal/transform"
 )
 
 type InstalledFile struct {

@@ -1,6 +1,6 @@
-# ferryPilot
+# ferryaide
 
-`ferryPilot` 是用于安装本仓库 `AISupport/` 资产的 Go CLI 工具。
+`ferryaide` 是用于安装本仓库 `AISupport/` 资产的 Go CLI 工具。
 
 ## 构建
 
@@ -18,43 +18,43 @@ make build
 
 ## 终端启动
 
-从仓库根目录进入 `ferryPilot` 工具目录：
+从仓库根目录进入 `ferryaide` 工具目录：
 
 ```bash
-cd utils/ferryPilot
+cd utils/ferryaide
 ```
 
 构建后可以直接从 `bin/` 目录启动本地可执行文件：
 
 ```bash
 make build
-./bin/ferryPilot -p speckit
+./bin/ferryaide -p speckit
 ```
 
 Windows PowerShell:
 
 ```powershell
-cd utils\ferryPilot
+cd utils\ferryaide
 make build
-.\bin\ferryPilot -p
+.\bin\ferryaide -p
 ```
 
-如果已经通过安装脚本或系统 PATH 安装了 `ferryPilot`，可以在任意终端目录直接运行：
+如果已经通过安装脚本或系统 PATH 安装了 `ferryaide`，可以在任意终端目录直接运行：
 
 ```bash
-ferryPilot -p speckit
+ferryaide -p speckit
 ```
 
 ## 使用
 
 ```bash
-ferryPilot -p speckit
-ferryPilot -g speckit
-ferryPilot -p -t codex speckit
-ferryPilot -p -t cursor speckit
-ferryPilot -p -t claude speckit
-ferryPilot -p -t copilot speckit
-ferryPilot -p -t gemini speckit
+ferryaide -p speckit
+ferryaide -g speckit
+ferryaide -p -t codex speckit
+ferryaide -p -t cursor speckit
+ferryaide -p -t claude speckit
+ferryaide -p -t copilot speckit
+ferryaide -p -t gemini speckit
 ```
 
 参数说明：
@@ -66,7 +66,7 @@ ferryPilot -p -t gemini speckit
 | `-t`, `--target` | 指定目标 Agent；省略时会在终端中选择 |
 | `--config` | 使用外部 `file_map.json` 覆盖内置默认配置 |
 
-如果省略 `-t/--target`，并且存在多个可选 Agent，`ferryPilot` 会先在终端中提供上下键选择；随后如果省略 package 名称，并且存在多个可选 package，也会继续提供上下键选择。
+如果省略 `-t/--target`，并且存在多个可选 Agent，`ferryaide` 会先在终端中提供上下键选择；随后如果省略 package 名称，并且存在多个可选 package，也会继续提供上下键选择。
 
 ## 配置
 
@@ -75,5 +75,5 @@ ferryPilot -p -t gemini speckit
 需要覆盖默认配置时：
 
 ```bash
-ferryPilot -p --config path/to/file_map.json speckit
+ferryaide -p --config path/to/file_map.json speckit
 ```

@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $repo = "fengxiaozi-liu/AILab"
-$asset = "ferryPilot-windows-amd64.exe"
+$asset = "ferryaide-windows-amd64.exe"
 $installDir = Join-Path $env:USERPROFILE "bin"
-$target = Join-Path $installDir "ferryPilot.exe"
+$target = Join-Path $installDir "ferryaide.exe"
 $url = "https://github.com/$repo/releases/latest/download/$asset"
 
 New-Item -ItemType Directory -Force $installDir | Out-Null
@@ -20,5 +20,5 @@ if ($paths -notcontains $installDir) {
   [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
 }
 
-Write-Host "ferryPilot installed to $target"
-Write-Host "Restart PowerShell, then run: ferryPilot -p speckit"
+Write-Host "ferryaide installed to $target"
+Write-Host "Restart PowerShell, then run: ferryaide -p speckit"

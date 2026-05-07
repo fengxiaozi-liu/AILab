@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"ferrypilot/internal/config"
+	"ferryaide/internal/config"
 )
 
 type Source struct {
@@ -67,7 +67,7 @@ func gitSource(ctx context.Context, dataSource config.DataSource) (Source, error
 	if dataSource.Repository == "" {
 		return Source{}, fmt.Errorf("git data source repository is required")
 	}
-	tmp, err := os.MkdirTemp("", "ferryPilot-*")
+	tmp, err := os.MkdirTemp("", "ferryaide-*")
 	if err != nil {
 		return Source{}, fmt.Errorf("create temp directory: %w", err)
 	}

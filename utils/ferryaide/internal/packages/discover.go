@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"sort"
 
-	"ferrypilot/internal/assets"
+	"ferryaide/internal/assets"
 )
 
 type Package struct {

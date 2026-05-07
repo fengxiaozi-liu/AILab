@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"ferrypilot/internal/app"
+	"ferryaide/internal/app"
 )
 
 func Parse(args []string) (app.Options, error) {

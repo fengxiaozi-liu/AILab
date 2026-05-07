@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"ferrypilot/internal/app"
-	"ferrypilot/internal/cli"
+	"ferryaide/internal/app"
+	"ferryaide/internal/cli"
 )
 
 func main() {

@@ -38,9 +38,9 @@ case "$arch" in
     ;;
 esac
 
-asset="ferryPilot-$goos-$goarch"
+asset="ferryaide-$goos-$goarch"
 url="https://github.com/$repo/releases/latest/download/$asset"
-target="$install_dir/ferryPilot"
+target="$install_dir/ferryaide"
 
 mkdir -p "$install_dir"
 
@@ -74,5 +74,5 @@ case ":$PATH:" in
     ;;
 esac
 
-echo "ferryPilot installed to $target"
-echo "Restart your terminal, then run: ferryPilot -p speckit"
+echo "ferryaide installed to $target"
+echo "Restart your terminal, then run: ferryaide -p speckit"

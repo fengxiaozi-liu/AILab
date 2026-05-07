@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"ferrypilot/internal/config"
+	"ferryaide/internal/config"
 )
 
 type TargetPlan struct {
